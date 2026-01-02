@@ -1,0 +1,594 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		C521D73B2F085FCF000AF3F5 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = C521D73A2F085FCF000AF3F5 /* GRDB */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		C521D6FA2F085E12000AF3F5 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C521D6E32F085E11000AF3F5 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C521D6EA2F085E11000AF3F5;
+			remoteInfo = Monitome;
+		};
+		C521D7042F085E12000AF3F5 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C521D6E32F085E11000AF3F5 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C521D6EA2F085E11000AF3F5;
+			remoteInfo = Monitome;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		C521D6EB2F085E11000AF3F5 /* Monitome.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Monitome.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C521D6F92F085E12000AF3F5 /* MonitomeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MonitomeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C521D7032F085E12000AF3F5 /* MonitomeUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MonitomeUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		C521D6ED2F085E11000AF3F5 /* Monitome */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Monitome;
+			sourceTree = "<group>";
+		};
+		C521D6FC2F085E12000AF3F5 /* MonitomeTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = MonitomeTests;
+			sourceTree = "<group>";
+		};
+		C521D7062F085E12000AF3F5 /* MonitomeUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = MonitomeUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		C521D6E82F085E11000AF3F5 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C521D73B2F085FCF000AF3F5 /* GRDB in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C521D6F62F085E12000AF3F5 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C521D7002F085E12000AF3F5 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		C521D6E22F085E11000AF3F5 = {
+			isa = PBXGroup;
+			children = (
+				C521D6ED2F085E11000AF3F5 /* Monitome */,
+				C521D6FC2F085E12000AF3F5 /* MonitomeTests */,
+				C521D7062F085E12000AF3F5 /* MonitomeUITests */,
+				C521D7392F085FCF000AF3F5 /* Frameworks */,
+				C521D6EC2F085E11000AF3F5 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		C521D6EC2F085E11000AF3F5 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				C521D6EB2F085E11000AF3F5 /* Monitome.app */,
+				C521D6F92F085E12000AF3F5 /* MonitomeTests.xctest */,
+				C521D7032F085E12000AF3F5 /* MonitomeUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		C521D7392F085FCF000AF3F5 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		C521D6EA2F085E11000AF3F5 /* Monitome */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C521D70D2F085E12000AF3F5 /* Build configuration list for PBXNativeTarget "Monitome" */;
+			buildPhases = (
+				C521D6E72F085E11000AF3F5 /* Sources */,
+				C521D6E82F085E11000AF3F5 /* Frameworks */,
+				C521D6E92F085E11000AF3F5 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				C521D6ED2F085E11000AF3F5 /* Monitome */,
+			);
+			name = Monitome;
+			packageProductDependencies = (
+				C521D73A2F085FCF000AF3F5 /* GRDB */,
+			);
+			productName = Monitome;
+			productReference = C521D6EB2F085E11000AF3F5 /* Monitome.app */;
+			productType = "com.apple.product-type.application";
+		};
+		C521D6F82F085E12000AF3F5 /* MonitomeTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C521D7102F085E12000AF3F5 /* Build configuration list for PBXNativeTarget "MonitomeTests" */;
+			buildPhases = (
+				C521D6F52F085E12000AF3F5 /* Sources */,
+				C521D6F62F085E12000AF3F5 /* Frameworks */,
+				C521D6F72F085E12000AF3F5 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C521D6FB2F085E12000AF3F5 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				C521D6FC2F085E12000AF3F5 /* MonitomeTests */,
+			);
+			name = MonitomeTests;
+			packageProductDependencies = (
+			);
+			productName = MonitomeTests;
+			productReference = C521D6F92F085E12000AF3F5 /* MonitomeTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		C521D7022F085E12000AF3F5 /* MonitomeUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C521D7132F085E12000AF3F5 /* Build configuration list for PBXNativeTarget "MonitomeUITests" */;
+			buildPhases = (
+				C521D6FF2F085E12000AF3F5 /* Sources */,
+				C521D7002F085E12000AF3F5 /* Frameworks */,
+				C521D7012F085E12000AF3F5 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C521D7052F085E12000AF3F5 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				C521D7062F085E12000AF3F5 /* MonitomeUITests */,
+			);
+			name = MonitomeUITests;
+			packageProductDependencies = (
+			);
+			productName = MonitomeUITests;
+			productReference = C521D7032F085E12000AF3F5 /* MonitomeUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		C521D6E32F085E11000AF3F5 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1640;
+				LastUpgradeCheck = 1640;
+				TargetAttributes = {
+					C521D6EA2F085E11000AF3F5 = {
+						CreatedOnToolsVersion = 16.4;
+					};
+					C521D6F82F085E12000AF3F5 = {
+						CreatedOnToolsVersion = 16.4;
+						TestTargetID = C521D6EA2F085E11000AF3F5;
+					};
+					C521D7022F085E12000AF3F5 = {
+						CreatedOnToolsVersion = 16.4;
+						TestTargetID = C521D6EA2F085E11000AF3F5;
+					};
+				};
+			};
+			buildConfigurationList = C521D6E62F085E11000AF3F5 /* Build configuration list for PBXProject "Monitome" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = C521D6E22F085E11000AF3F5;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				C521D7382F085E63000AF3F5 /* XCRemoteSwiftPackageReference "GRDB.swift" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = C521D6EC2F085E11000AF3F5 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				C521D6EA2F085E11000AF3F5 /* Monitome */,
+				C521D6F82F085E12000AF3F5 /* MonitomeTests */,
+				C521D7022F085E12000AF3F5 /* MonitomeUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		C521D6E92F085E11000AF3F5 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C521D6F72F085E12000AF3F5 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C521D7012F085E12000AF3F5 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		C521D6E72F085E11000AF3F5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C521D6F52F085E12000AF3F5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C521D6FF2F085E12000AF3F5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		C521D6FB2F085E12000AF3F5 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C521D6EA2F085E11000AF3F5 /* Monitome */;
+			targetProxy = C521D6FA2F085E12000AF3F5 /* PBXContainerItemProxy */;
+		};
+		C521D7052F085E12000AF3F5 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C521D6EA2F085E11000AF3F5 /* Monitome */;
+			targetProxy = C521D7042F085E12000AF3F5 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		C521D70B2F085E12000AF3F5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 8B9YURJS4G;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.5;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		C521D70C2F085E12000AF3F5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 8B9YURJS4G;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.5;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		C521D70E2F085E12000AF3F5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Monitome/Monitome.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8B9YURJS4G;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = swair.Monitome;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		C521D70F2F085E12000AF3F5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Monitome/Monitome.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8B9YURJS4G;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = swair.Monitome;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		C521D7112F085E12000AF3F5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8B9YURJS4G;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = swair.MonitomeTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Monitome.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Monitome";
+			};
+			name = Debug;
+		};
+		C521D7122F085E12000AF3F5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8B9YURJS4G;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = swair.MonitomeTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Monitome.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Monitome";
+			};
+			name = Release;
+		};
+		C521D7142F085E12000AF3F5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8B9YURJS4G;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = swair.MonitomeUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = Monitome;
+			};
+			name = Debug;
+		};
+		C521D7152F085E12000AF3F5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8B9YURJS4G;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = swair.MonitomeUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = Monitome;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		C521D6E62F085E11000AF3F5 /* Build configuration list for PBXProject "Monitome" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C521D70B2F085E12000AF3F5 /* Debug */,
+				C521D70C2F085E12000AF3F5 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C521D70D2F085E12000AF3F5 /* Build configuration list for PBXNativeTarget "Monitome" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C521D70E2F085E12000AF3F5 /* Debug */,
+				C521D70F2F085E12000AF3F5 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C521D7102F085E12000AF3F5 /* Build configuration list for PBXNativeTarget "MonitomeTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C521D7112F085E12000AF3F5 /* Debug */,
+				C521D7122F085E12000AF3F5 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C521D7132F085E12000AF3F5 /* Build configuration list for PBXNativeTarget "MonitomeUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C521D7142F085E12000AF3F5 /* Debug */,
+				C521D7152F085E12000AF3F5 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		C521D7382F085E63000AF3F5 /* XCRemoteSwiftPackageReference "GRDB.swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/groue/GRDB.swift.git";
+			requirement = {
+				branch = master;
+				kind = branch;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		C521D73A2F085FCF000AF3F5 /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C521D7382F085E63000AF3F5 /* XCRemoteSwiftPackageReference "GRDB.swift" */;
+			productName = GRDB;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = C521D6E32F085E11000AF3F5 /* Project object */;
+}
