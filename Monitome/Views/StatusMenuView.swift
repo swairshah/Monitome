@@ -36,7 +36,7 @@ struct StatusMenuView: View {
                 HStack {
                     Text("Today:")
                         .foregroundColor(.secondary)
-                    Text("\(StorageManager.shared.todayCount()) screenshots")
+                    Text("\(appState.todayScreenshotCount) screenshots")
                 }
                 .font(.caption)
 
