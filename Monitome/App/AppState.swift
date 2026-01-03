@@ -27,6 +27,9 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Today's screenshot count - updates reactively when screenshots are captured
+    @Published var todayScreenshotCount: Int = 0
+
     private init() {
         // Restore saved preferences
         self.isRecording = UserDefaults.standard.bool(forKey: recordingKey)
@@ -36,6 +39,20 @@ final class AppState: ObservableObject {
             UserDefaults.standard.set(true, forKey: eventTriggersKey)
         }
         self.eventTriggersEnabled = UserDefaults.standard.bool(forKey: eventTriggersKey)
+
+        // Initialize today's count
+        self.todayScreenshotCount = StorageManager.shared.todayCount()
+
+        // Listen for new screenshots to update count
+        NotificationCenter.default.addObserver(
+            forName: .screenshotCaptured,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.todayScreenshotCount = StorageManager.shared.todayCount()
+            }
+        }
     }
 }
 
