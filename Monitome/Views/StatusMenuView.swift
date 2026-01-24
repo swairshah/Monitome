@@ -10,43 +10,32 @@ struct StatusMenuView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Header
+            // Recording toggle at top
             HStack {
-                Text("Monitome")
-                    .font(.headline)
+                Toggle(isOn: $appState.isRecording) {
+                    Label(
+                        appState.isRecording ? "Recording" : "Paused",
+                        systemImage: appState.isRecording ? "record.circle.fill" : "pause.circle"
+                    )
+                }
+                .toggleStyle(.switch)
                 Spacer()
                 Circle()
                     .fill(appState.isRecording ? Color.red : Color.gray)
                     .frame(width: 8, height: 8)
             }
 
-            Divider()
-
-            // Recording toggle
-            Toggle(isOn: $appState.isRecording) {
-                Label(
-                    appState.isRecording ? "Recording" : "Paused",
-                    systemImage: appState.isRecording ? "record.circle.fill" : "pause.circle"
-                )
+            // Stats in one row
+            HStack {
+                Text("Today:")
+                    .foregroundColor(.secondary)
+                Text("\(appState.todayScreenshotCount)")
+                Spacer()
+                Text("Storage:")
+                    .foregroundColor(.secondary)
+                Text(formatBytes(StorageManager.shared.totalStorageUsed()))
             }
-            .toggleStyle(.switch)
-
-            // Stats
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text("Today:")
-                        .foregroundColor(.secondary)
-                    Text("\(appState.todayScreenshotCount) screenshots")
-                }
-                .font(.caption)
-
-                HStack {
-                    Text("Storage:")
-                        .foregroundColor(.secondary)
-                    Text(formatBytes(StorageManager.shared.totalStorageUsed()))
-                }
-                .font(.caption)
-            }
+            .font(.caption)
 
             Divider()
 
