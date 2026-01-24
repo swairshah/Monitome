@@ -263,6 +263,17 @@ final class ScreenRecorder: NSObject {
                 configuration: config
             )
 
+            // Skip duplicate screenshots (only for timer-based captures)
+            if reason == .timer {
+                if DuplicateDetector.shared.isDuplicate(image, forDisplay: display.displayID) {
+                    print("Screenshot skipped (duplicate)")
+                    return
+                }
+            } else {
+                // For event-based captures, still update the hash for future comparisons
+                DuplicateDetector.shared.updateHash(image, forDisplay: display.displayID)
+            }
+
             guard let jpegData = jpegData(from: image, quality: Config.jpegQuality) else {
                 throw ScreenRecorderError.imageConversionFailed
             }
