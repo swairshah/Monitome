@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import KeyboardShortcuts
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -23,6 +24,30 @@ struct SettingsView: View {
                 Text("Settings")
                     .font(.title2)
                     .fontWeight(.semibold)
+
+                Divider()
+
+                // Permissions Section
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Permissions")
+                        .font(.headline)
+
+                    Text("If macOS prompts fail to open the correct page, use these buttons:")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    HStack(spacing: 12) {
+                        Button("Screen Recording") {
+                            openScreenRecordingSettings()
+                        }
+                        .buttonStyle(.bordered)
+
+                        Button("Accessibility") {
+                            openAccessibilitySettings()
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
 
                 Divider()
 
@@ -46,19 +71,36 @@ struct SettingsView: View {
                         Image(systemName: hasAccessibilityPermission ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                             .foregroundColor(hasAccessibilityPermission ? .green : .orange)
 
-                        VStack(alignment: .leading) {
-                            Text(hasAccessibilityPermission ? "Accessibility: Granted" : "Accessibility: Required for tab detection")
-                                .font(.caption)
-                            if !hasAccessibilityPermission {
-                                Button("Open System Settings") {
-                                    openAccessibilitySettings()
-                                }
-                                .font(.caption)
-                                .buttonStyle(.link)
-                            }
-                        }
+                        Text(hasAccessibilityPermission ? "Accessibility: Granted" : "Accessibility: Required for tab detection")
+                            .font(.caption)
                     }
                     .padding(.top, 4)
+                }
+
+                Divider()
+
+                // Keyboard Shortcuts Section
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Keyboard Shortcuts")
+                        .font(.headline)
+
+                    Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 12) {
+                        GridRow {
+                            Text("Capture Now:")
+                                .frame(width: 120, alignment: .trailing)
+                            KeyboardShortcuts.Recorder(for: .captureNow)
+                        }
+
+                        GridRow {
+                            Text("Toggle Recording:")
+                                .frame(width: 120, alignment: .trailing)
+                            KeyboardShortcuts.Recorder(for: .toggleRecording)
+                        }
+                    }
+
+                    Text("Global shortcuts work even when the app is in the background")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
 
                 Divider()
@@ -147,21 +189,26 @@ struct SettingsView: View {
             }
             .padding()
         }
-        .frame(width: 420, height: 520)
+        .frame(width: 420, height: 700)
         .onAppear {
             hasAccessibilityPermission = AXIsProcessTrusted()
         }
     }
 
-    private func openAccessibilitySettings() {
-        // Request permission (shows system dialog)
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary
-        _ = AXIsProcessTrustedWithOptions(options)
+    private func openScreenRecordingSettings() {
+        // Use shell command to reliably open Screen Recording settings on macOS 13+
+        let task = Process()
+        task.launchPath = "/usr/bin/open"
+        task.arguments = ["x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"]
+        try? task.run()
+    }
 
-        // Also open System Settings directly
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-            NSWorkspace.shared.open(url)
-        }
+    private func openAccessibilitySettings() {
+        // Use shell command to reliably open Accessibility settings on macOS 13+
+        let task = Process()
+        task.launchPath = "/usr/bin/open"
+        task.arguments = ["x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"]
+        try? task.run()
 
         // Check permission again after a delay
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {

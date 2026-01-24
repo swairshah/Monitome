@@ -6,6 +6,7 @@
 import AppKit
 import ScreenCaptureKit
 import Combine
+import KeyboardShortcuts
 
 @MainActor
 class AppDelegate: NSObject, NSApplicationDelegate {
@@ -43,6 +44,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         .store(in: &cancellables)
 
+        // Register keyboard shortcuts
+        setupKeyboardShortcuts()
+
         // Check permission and start if previously recording
         Task {
             do {
@@ -71,5 +75,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Stop recording gracefully
         AppState.shared.isRecording = false
         eventMonitor.stop()
+    }
+
+    // MARK: - Keyboard Shortcuts
+
+    private func setupKeyboardShortcuts() {
+        KeyboardShortcuts.onKeyUp(for: .captureNow) { [weak self] in
+            self?.recorder.captureNow(reason: .manual)
+        }
+
+        KeyboardShortcuts.onKeyUp(for: .toggleRecording) {
+            AppState.shared.isRecording.toggle()
+        }
     }
 }
