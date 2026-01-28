@@ -12,8 +12,10 @@ struct SettingsView: View {
 
     @AppStorage("screenshotIntervalSeconds") private var interval: Double = 10
     @AppStorage("storageLimitGB") private var storageLimitGB: Int = 5
+    @AppStorage("anthropicAPIKey") private var anthropicAPIKey: String = ""
 
     @State private var hasAccessibilityPermission = AXIsProcessTrusted()
+    @State private var showAPIKey = false
 
     private let intervalOptions: [Double] = [5, 10, 15, 30, 60]
     private let storageLimitOptions: [Int] = [1, 2, 5, 10, 20, 50]
@@ -137,6 +139,36 @@ struct SettingsView: View {
                     Text("Old screenshots are automatically deleted when limit is reached")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                }
+
+                Divider()
+                
+                // AI Indexing Section
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("AI Indexing")
+                        .font(.headline)
+                    
+                    // API Key
+                    HStack {
+                        if showAPIKey {
+                            TextField("Anthropic API Key", text: $anthropicAPIKey)
+                                .textFieldStyle(.roundedBorder)
+                        } else {
+                            SecureField("Anthropic API Key", text: $anthropicAPIKey)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                        
+                        Button(action: { showAPIKey.toggle() }) {
+                            Image(systemName: showAPIKey ? "eye.slash" : "eye")
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    
+                    if anthropicAPIKey.isEmpty {
+                        Text("Get key at console.anthropic.com or set ANTHROPIC_API_KEY in ~/.env")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
                 }
 
                 Divider()
