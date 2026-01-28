@@ -76,3 +76,19 @@ coverage.xml
 *.log
 *.tmp
 *.temp
+
+# Activity agent build artifacts
+activity-agent/dist/
+activity-agent/node_modules/
+activity-agent/*.db
+activity-agent/data/
+
+# Binaries (copied at build time)
+Monitome/Binaries/
+
+# Test files
+test.png
+agent.swift
+
+# Release artifacts
+dist/

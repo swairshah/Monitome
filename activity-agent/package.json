@@ -1,0 +1,29 @@
+{
+  "name": "@swairshah/activity-agent",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Activity tracking agent that analyzes screenshots to maintain a searchable activity index",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "build:binary": "bun build src/cli.ts --compile --outfile dist/activity-agent",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "check": "tsc --noEmit",
+    "start": "tsx src/cli.ts",
+    "process": "tsx src/cli.ts process"
+  },
+  "dependencies": {
+    "@mariozechner/pi-ai": "*",
+    "@mariozechner/pi-agent-core": "*",
+    "@sinclair/typebox": "^0.34.33",
+    "better-sqlite3": "^11.7.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.5",
+    "tsx": "^4.20.3",
+    "typescript": "^5.9.2"
+  }
+}

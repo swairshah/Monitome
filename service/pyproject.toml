@@ -1,0 +1,16 @@
+[project]
+name = "monitome-service"
+version = "0.1.0"
+description = "Screenshot analysis service using BAML"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.32.0",
+    "baml-py>=0.216.0",
+    "python-multipart>=0.0.9",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.0.0",
+]

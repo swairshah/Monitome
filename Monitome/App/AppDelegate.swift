@@ -46,6 +46,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Register keyboard shortcuts
         setupKeyboardShortcuts()
+        
+        // Start activity agent indexing
+        ActivityAgentManager.shared.startPeriodicIndexing()
 
         // Check permission and start if previously recording
         Task {

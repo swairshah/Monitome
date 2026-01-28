@@ -1,114 +1,127 @@
-## macOS App Build & Distribution Guide
+# Release Guide
 
-```
-PROJECT_DIR=~/work/projects/Monitome
-PROJECT_NAME=Monitome
-BUNDLE_ID=swair.Monitome
-SIGNING_IDENTITY="Developer ID Application: Swair Rajesh Shah (8B9YURJS4G)"
-OUTPUT_DIR=~/Desktop/Monitome
-```
+## Quick Release
 
----
-## Step 1: Build the app
+```bash
+# 1. Build the release DMG
+./scripts/build-release.sh 0.1.0
 
-### Clean and build for release
-xcodebuild -project "$PROJECT_DIR/$PROJECT_NAME.xcodeproj" \
-  -scheme "$PROJECT_NAME" \
-  -configuration Release \
-  -archivePath "$OUTPUT_DIR/$PROJECT_NAME.xcarchive" \
-  archive
+# 2. Create GitHub release and upload DMG
+gh release create v0.1.0 dist/Monitome-0.1.0.dmg --title "v0.1.0" --notes "Initial release"
 
-## Step 2: Export the archive
-
-### Create export options plist
-```
-cat > "$OUTPUT_DIR/ExportOptions.plist" << 'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>method</key>
-    <string>developer-id</string>
-    <key>teamID</key>
-    <string>8B9YURJS4G</string>
-</dict>
-</plist>
-EOF
+# 3. Update Homebrew tap with the SHA256 from build output
 ```
 
-### Export
-```
-xcodebuild -exportArchive \
-  -archivePath "$OUTPUT_DIR/$PROJECT_NAME.xcarchive" \
-  -exportPath "$OUTPUT_DIR/Export" \
-  -exportOptionsPlist "$OUTPUT_DIR/ExportOptions.plist"
+## Manual Steps
+
+### 1. Build Release
+
+```bash
+./scripts/build-release.sh 0.1.0
 ```
 
-## Step 3: Sign the app (if not already signed by export)
+This will:
+- Build the activity-agent (Bun compiled binary)
+- Build the Swift app (Release configuration)
+- Bundle activity-agent into the .app
+- Create a DMG
+- Output the SHA256
 
-### Remove extended attributes
-```
-xattr -cr "$OUTPUT_DIR/Export/$PROJECT_NAME.app"
-```
+### 2. Create GitHub Release
 
-### Sign with hardened runtime + timestamp
-```
-codesign --deep --force --options runtime --timestamp \
-  --sign "$SIGNING_IDENTITY" \
-  "$OUTPUT_DIR/Export/$PROJECT_NAME.app"
-```
+1. Go to https://github.com/swairshah/Monitome/releases/new
+2. Tag: `v0.1.0`
+3. Title: `v0.1.0`
+4. Upload: `dist/Monitome-0.1.0.dmg`
+5. Publish
 
-### Verify
-```
-codesign -vvv --deep --strict "$OUTPUT_DIR/Export/$PROJECT_NAME.app"
-```
-
-## Step 4: Create DMG
-
-### Create temp folder with app + Applications shortcut
-```
-mkdir -p "$OUTPUT_DIR/dmg-contents"
-cp -R "$OUTPUT_DIR/Export/$PROJECT_NAME.app" "$OUTPUT_DIR/dmg-contents/"
-ln -sf /Applications "$OUTPUT_DIR/dmg-contents/Applications"
+Or use GitHub CLI:
+```bash
+gh release create v0.1.0 dist/Monitome-0.1.0.dmg --title "v0.1.0" --notes "Initial release"
 ```
 
-### Create DMG
-```
-rm -f "$OUTPUT_DIR/$PROJECT_NAME.dmg"
-hdiutil create -volname "$PROJECT_NAME" \
-  -srcfolder "$OUTPUT_DIR/dmg-contents" \
-  -ov -format UDZO \
-  "$OUTPUT_DIR/$PROJECT_NAME.dmg"
+### 3. Update Homebrew Tap
+
+Copy `homebrew/monitome.rb` to your tap repo and update the SHA256:
+
+```bash
+# Clone your tap
+cd ~/work/projects
+git clone https://github.com/swairshah/homebrew-tap.git
+cd homebrew-tap
+
+# Copy and update the formula
+cp ../Monitome/homebrew/monitome.rb Casks/monitome.rb
+
+# Edit Casks/monitome.rb and replace PLACEHOLDER_SHA256 with actual SHA256
+
+# Commit and push
+git add Casks/monitome.rb
+git commit -m "Add monitome cask v0.1.0"
+git push
 ```
 
-### Cleanup temp folder
-```
-rm -rf "$OUTPUT_DIR/dmg-contents"
+### 4. Test Installation
+
+```bash
+# Install
+brew install --cask swairshah/tap/monitome
+
+# Or if tap not added yet
+brew tap swairshah/tap
+brew install --cask monitome
 ```
 
-### Sign DMG
-```
-codesign --force --timestamp \
-  --sign "$SIGNING_IDENTITY" \
-  "$OUTPUT_DIR/$PROJECT_NAME.dmg"
+## Code Signing & Notarization (Optional but Recommended)
+
+For distribution without Gatekeeper warnings:
+
+### 1. Sign the App
+
+```bash
+# Sign with Developer ID
+codesign --deep --force --verify --verbose \
+    --sign "Developer ID Application: Your Name (TEAM_ID)" \
+    --options runtime \
+    dist/Monitome.app
+
+# Sign the activity-agent binary specifically
+codesign --force --verify --verbose \
+    --sign "Developer ID Application: Your Name (TEAM_ID)" \
+    --options runtime \
+    dist/Monitome.app/Contents/MacOS/activity-agent
 ```
 
-## Step 5: Notarize
+### 2. Notarize
 
-```
-xcrun notarytool submit "$OUTPUT_DIR/$PROJECT_NAME.dmg" \
-  --keychain-profile notary-profile \
-  --wait
+```bash
+# Create zip for notarization
+ditto -c -k --keepParent dist/Monitome.app dist/Monitome.zip
+
+# Submit for notarization
+xcrun notarytool submit dist/Monitome.zip \
+    --apple-id "your@email.com" \
+    --team-id "TEAM_ID" \
+    --password "app-specific-password" \
+    --wait
+
+# Staple the notarization ticket
+xcrun stapler staple dist/Monitome.app
 ```
 
-## Step 6: Staple (after notarization succeeds)
+### 3. Then Create DMG
 
-```
-xcrun stapler staple "$OUTPUT_DIR/$PROJECT_NAME.dmg"
+```bash
+# Create DMG from notarized app
+hdiutil create -volname "Monitome" \
+    -srcfolder dist/Monitome.app \
+    -ov -format UDZO \
+    dist/Monitome-0.1.0.dmg
 ```
 
-## Step 7: Verify
+## Version Bumping
 
-```
-spctl -a -vv "$OUTPUT_DIR/$PROJECT_NAME.dmg"
-```
+Update version in:
+1. `Monitome.xcodeproj` (MARKETING_VERSION)
+2. `activity-agent/package.json`
+3. `homebrew/monitome.rb`

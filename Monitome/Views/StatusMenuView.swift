@@ -57,11 +57,6 @@ struct StatusMenuView: View {
                 }
                 .buttonStyle(.bordered)
 
-                Button("Open Folder") {
-                    NSWorkspace.shared.open(StorageManager.shared.recordingsRoot)
-                }
-                .buttonStyle(.bordered)
-
                 Spacer()
 
                 Button("Quit") {
