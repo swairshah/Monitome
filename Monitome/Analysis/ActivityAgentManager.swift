@@ -304,6 +304,23 @@ final class ActivityAgentManager: ObservableObject {
     
     // MARK: - Search
     
+    /// Get activities for a specific date
+    func getActivitiesForDate(_ date: Date) async -> [ActivitySearchResult] {
+        guard isAgentAvailable else { return [] }
+        
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let dateStr = formatter.string(from: date)
+        
+        do {
+            let output = try await runAgent(["date", dateStr])
+            return parseDateResults(output)
+        } catch {
+            print("Get activities for date failed: \(error)")
+            return []
+        }
+    }
+    
     /// Fast FTS search (direct SQLite, instant)
     func searchFTS(_ query: String) async -> [ActivitySearchResult] {
         guard isAgentAvailable, !query.isEmpty else { return [] }
@@ -577,6 +594,13 @@ final class ActivityAgentManager: ObservableObject {
         }
         
         return results
+    }
+    
+    /// Parse date command output (similar to FTS but has ## AppName headers)
+    private func parseDateResults(_ output: String) -> [ActivitySearchResult] {
+        // Reuse parseSearchResults - the format is compatible
+        // Date output has ## App headers but the [date time] App lines are the same
+        return parseSearchResults(output)
     }
     
     private func createSearchResult(from r: (date: String, time: String, app: String, activity: String, summary: String, tags: [String], url: String?, filename: String)) -> ActivitySearchResult? {

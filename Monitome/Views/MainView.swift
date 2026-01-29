@@ -8,6 +8,7 @@ import SwiftUI
 enum MainTab {
     case search
     case chat
+    case dayActivity  // Shows activity for selected date
 }
 
 struct MainView: View {
@@ -22,6 +23,9 @@ struct MainView: View {
     @State private var isSearchingInProgress = false
     @State private var showActivityLog = false
     @State private var selectedTab: MainTab = .search
+    @State private var previousTab: MainTab = .search  // To restore after closing day view
+    @State private var dayActivities: [ActivitySearchResult] = []
+    @State private var isLoadingDayActivities = false
     @AppStorage("indexingEnabled") private var indexingEnabled = true
 
     private let columns = [
@@ -184,11 +188,25 @@ struct MainView: View {
                     )
                 case .chat:
                     AgentChatView()
+                case .dayActivity:
+                    DayActivityView(
+                        date: selectedDate,
+                        activities: dayActivities,
+                        screenshots: screenshots,
+                        isLoading: isLoadingDayActivities,
+                        onClose: closeDayActivityView
+                    )
                 }
             }
         }
         .onChange(of: selectedDate) { _, newDate in
             loadScreenshots(for: newDate)
+            // Show day activity view when date is selected
+            if selectedTab != .dayActivity {
+                previousTab = selectedTab
+            }
+            selectedTab = .dayActivity
+            loadDayActivities(for: newDate)
         }
         .onAppear {
             loadScreenshots(for: selectedDate)
@@ -236,6 +254,23 @@ struct MainView: View {
 
     private func loadScreenshots(for date: Date) {
         screenshots = StorageManager.shared.fetchForDay(date)
+    }
+    
+    private func loadDayActivities(for date: Date) {
+        isLoadingDayActivities = true
+        dayActivities = []
+        
+        Task {
+            let activities = await agentManager.getActivitiesForDate(date)
+            await MainActor.run {
+                dayActivities = activities
+                isLoadingDayActivities = false
+            }
+        }
+    }
+    
+    private func closeDayActivityView() {
+        selectedTab = previousTab
     }
 
     private func setupNotificationObserver() {
@@ -341,6 +376,229 @@ struct SearchTabView: View {
                     .padding()
                 }
             }
+        }
+    }
+}
+
+// MARK: - Day Activity View
+
+struct DayActivityView: View {
+    let date: Date
+    let activities: [ActivitySearchResult]
+    let screenshots: [Screenshot]
+    let isLoading: Bool
+    let onClose: () -> Void
+    
+    private let columns = [
+        GridItem(.adaptive(minimum: 280, maximum: 400), spacing: 16)
+    ]
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header with close button
+            HStack {
+                VStack(alignment: .leading) {
+                    Text(date, style: .date)
+                        .font(.headline)
+                    Text("\(activities.isEmpty ? screenshots.count : activities.count) \(activities.isEmpty ? "screenshots" : "activities")")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                Spacer()
+                
+                Button(action: onClose) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title2)
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.escape, modifiers: [])
+            }
+            .padding()
+            
+            Divider()
+            
+            // Content
+            if isLoading {
+                Spacer()
+                ProgressView("Loading activities...")
+                Spacer()
+            } else if !activities.isEmpty {
+                // Show indexed activities
+                ScrollView {
+                    LazyVGrid(columns: columns, spacing: 16) {
+                        ForEach(activities) { activity in
+                            DayActivityCard(activity: activity)
+                        }
+                    }
+                    .padding()
+                }
+            } else if !screenshots.isEmpty {
+                // Fallback: show screenshots (not yet indexed)
+                VStack {
+                    HStack {
+                        Image(systemName: "info.circle")
+                            .foregroundColor(.orange)
+                        Text("Not yet indexed. Showing raw screenshots.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+                    
+                    ScrollView {
+                        LazyVGrid(columns: columns, spacing: 16) {
+                            ForEach(screenshots) { screenshot in
+                                UnindexedScreenshotCard(screenshot: screenshot)
+                            }
+                        }
+                        .padding()
+                    }
+                }
+            } else {
+                Spacer()
+                ContentUnavailableView(
+                    "No Activity",
+                    systemImage: "calendar.badge.exclamationmark",
+                    description: Text("No screenshots captured on this day")
+                )
+                Spacer()
+            }
+        }
+    }
+}
+
+// MARK: - Day Activity Card (shows analysis instead of screenshot)
+
+struct DayActivityCard: View {
+    let activity: ActivitySearchResult
+    @State private var isHovered = false
+    @State private var showScreenshot = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Activity content (instead of screenshot thumbnail)
+            VStack(alignment: .leading, spacing: 6) {
+                // App and time
+                HStack {
+                    if let appName = activity.appName {
+                        Text(appName)
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.accentColor)
+                    }
+                    Spacer()
+                    Text(activity.timestamp, style: .time)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                
+                // Activity description
+                Text(activity.activity)
+                    .font(.subheadline)
+                    .lineLimit(3)
+                
+                // Summary if available
+                if !activity.summary.isEmpty {
+                    Text(activity.summary)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(4)
+                }
+                
+                // URL if available
+                if let url = activity.url, !url.isEmpty {
+                    Text(url)
+                        .font(.caption2)
+                        .foregroundColor(.blue)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                
+                // Tags
+                if !activity.tags.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 4) {
+                            ForEach(activity.tags.prefix(6), id: \.self) { tag in
+                                Text(tag)
+                                    .font(.system(size: 9))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.accentColor.opacity(0.1))
+                                    .cornerRadius(4)
+                            }
+                        }
+                    }
+                }
+            }
+            .frame(minHeight: 100)
+            
+            // Show screenshot button
+            Button(action: { showScreenshot = true }) {
+                HStack {
+                    Image(systemName: "photo")
+                    Text("View Screenshot")
+                }
+                .font(.caption)
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+        .padding(12)
+        .background(Color.gray.opacity(0.1))
+        .cornerRadius(12)
+        .sheet(isPresented: $showScreenshot) {
+            ActivityDetailView(result: activity)
+        }
+    }
+}
+
+// MARK: - Unindexed Screenshot Card (for days not yet indexed)
+
+struct UnindexedScreenshotCard: View {
+    let screenshot: Screenshot
+    @State private var showDetail = false
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Thumbnail
+            if let image = NSImage(contentsOfFile: screenshot.filePath) {
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(height: 140)
+                    .clipped()
+                    .cornerRadius(8)
+            } else {
+                Rectangle()
+                    .fill(Color.gray.opacity(0.3))
+                    .frame(height: 140)
+                    .cornerRadius(8)
+                    .overlay {
+                        Image(systemName: "photo")
+                            .foregroundColor(.gray)
+                    }
+            }
+            
+            // Time
+            HStack {
+                Text(Date(timeIntervalSince1970: TimeInterval(screenshot.capturedAt)), style: .time)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+            }
+        }
+        .padding(8)
+        .background(Color.gray.opacity(0.1))
+        .cornerRadius(12)
+        .onTapGesture {
+            showDetail = true
+        }
+        .sheet(isPresented: $showDetail) {
+            ScreenshotDetailView(screenshot: screenshot)
         }
     }
 }
