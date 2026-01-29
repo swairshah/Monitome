@@ -400,7 +400,7 @@ class ChatHistory: ObservableObject {
 }
 
 struct AgentChatView: View {
-    @ObservedObject private var agentManager = ActivityAgentManager.shared
+    @ObservedObject private var piAgent = PiAgentManager.shared
     @ObservedObject private var chatHistory = ChatHistory.shared
     @State private var inputText = ""
     @State private var isProcessing = false
@@ -511,9 +511,8 @@ struct AgentChatView: View {
         isProcessing = true
         
         Task {
-            // Build history from previous messages (exclude the one we just added)
-            let history = chatHistory.messages.dropLast().map { (isUser: $0.isUser, text: $0.text) }
-            let response = await agentManager.chat(text, history: Array(history))
+            // Pi handles session persistence internally via --continue
+            let response = await piAgent.chat(text)
             await MainActor.run {
                 // Extract screenshot filenames from response
                 let screenshots = extractScreenshots(from: response)
