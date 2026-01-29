@@ -22,18 +22,26 @@ echo "Building $APP_NAME v$VERSION..."
 rm -rf "$DIST_DIR"
 mkdir -p "$DIST_DIR"
 
-# 1. Build the activity-agent binary and extension
-echo "Building activity-agent..."
+# 1. Build the activity-agent binary (Universal: ARM64 + x86_64)
+echo "Building activity-agent (universal binary)..."
 cd "$PROJECT_DIR/activity-agent"
 npm install --silent 2>/dev/null || true
-bun build src/cli.ts --compile --outfile dist/activity-agent
+
+# Build for both architectures
+echo "  Building for ARM64..."
+bun build src/cli.ts --compile --target=bun-darwin-arm64 --outfile dist/activity-agent-arm64
+echo "  Building for x86_64..."
+bun build src/cli.ts --compile --target=bun-darwin-x64 --outfile dist/activity-agent-x64
+echo "  Creating universal binary..."
+lipo -create -output dist/activity-agent dist/activity-agent-arm64 dist/activity-agent-x64
+rm dist/activity-agent-arm64 dist/activity-agent-x64
 
 # Build TypeScript (includes extension)
 echo "Building extension..."
 npm run build
 
-# 2. Build Pi binary
-echo "Building Pi binary..."
+# 2. Build Pi binary (Universal: ARM64 + x86_64)
+echo "Building Pi binary (universal binary)..."
 PI_BUILD_DIR="$DIST_DIR/pi-build"
 rm -rf "$PI_BUILD_DIR"
 mkdir -p "$PI_BUILD_DIR"
@@ -53,19 +61,29 @@ fi
 echo "Using Pi from: $PI_PKG_DIR"
 cp -r "$PI_PKG_DIR"/* "$PI_BUILD_DIR/"
 cd "$PI_BUILD_DIR"
-bun build dist/cli.js --compile --outfile pi
+
+# Build for both architectures
+echo "  Building for ARM64..."
+bun build dist/cli.js --compile --target=bun-darwin-arm64 --outfile pi-arm64
+echo "  Building for x86_64..."
+bun build dist/cli.js --compile --target=bun-darwin-x64 --outfile pi-x64
+echo "  Creating universal binary..."
+lipo -create -output pi pi-arm64 pi-x64
+rm pi-arm64 pi-x64
 
 # Copy theme files (required at runtime)
 mkdir -p "$PI_BUILD_DIR/theme"
 cp "$PI_PKG_DIR/dist/modes/interactive/theme"/*.json "$PI_BUILD_DIR/theme/"
 
-# 2. Build the Swift app (Release)
-echo "Building Swift app..."
+# 2. Build the Swift app (Release, Universal binary)
+echo "Building Swift app (universal binary)..."
 cd "$PROJECT_DIR"
 xcodebuild -project Monitome.xcodeproj \
     -scheme Monitome \
     -configuration Release \
     -derivedDataPath "$DIST_DIR/build" \
+    -arch arm64 -arch x86_64 \
+    ONLY_ACTIVE_ARCH=NO \
     clean build \
     CODE_SIGN_IDENTITY="$SIGN_IDENTITY" \
     DEVELOPMENT_TEAM="$TEAM_ID" \
@@ -87,8 +105,9 @@ echo "Bundling activity-agent..."
 cp "$PROJECT_DIR/activity-agent/dist/activity-agent" "$APP_BUNDLE/Contents/MacOS/"
 chmod +x "$APP_BUNDLE/Contents/MacOS/activity-agent"
 
-# Remove any stray copy in Resources (Xcode might copy it there)
+# Remove any stray copies in Resources (Xcode might copy them there)
 rm -f "$APP_BUNDLE/Contents/Resources/activity-agent"
+rm -f "$APP_BUNDLE/Contents/Resources/pi"
 
 # 4b. Copy Pi binary and extension into the app bundle
 echo "Bundling Pi..."
