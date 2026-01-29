@@ -61,13 +61,13 @@ final class PiAgentManager: ObservableObject {
         let foundPiPath = possiblePiPaths.first { FileManager.default.fileExists(atPath: $0) }
         self.piPath = foundPiPath ?? bundleMacOS
         
-        // Look for extension
+        // Look for extension - prefer bundled version
         let bundleExtension = Bundle.main.resourcePath.map { $0 + "/extensions/monitome-search/index.js" } ?? ""
         
         let possibleExtPaths = [
             bundleExtension,
-            // Development paths
-            NSHomeDirectory() + "/work/projects/Monitome/activity-agent/dist/extension/index.js",
+            // Development: use bundled extension (not tsc output which has external imports)
+            NSHomeDirectory() + "/work/projects/Monitome/activity-agent/dist/extension-bundle.js",
         ]
         
         let foundExtPath = possibleExtPaths.first { FileManager.default.fileExists(atPath: $0) }
@@ -226,9 +226,41 @@ final class PiAgentManager: ObservableObject {
         // Disable built-in tools (we only want our search tools)
         args += ["--no-tools"]
         
+        // System prompt - give Pi context about Monitome
+        args += ["--system", systemPrompt]
+        
         // The message
         args += [message]
         
         return args
     }
+    
+    private let systemPrompt = """
+You are the Monitome search assistant. Monitome is a macOS app that periodically captures screenshots and indexes your activity using AI.
+
+Your role:
+- Help users search and explore their captured activity history
+- Answer questions about what they were working on, when, and in which apps
+- Use the search tools to find relevant screenshots and activity entries
+
+The activity index contains:
+- Screenshots captured every few minutes (or on app/tab switch)
+- AI-extracted metadata: app name, window title, URLs, file paths, terminal commands
+- Summaries of what the user was doing
+- Tags for categorization
+
+Available search capabilities:
+- Full-text search across all activity fields
+- Filter by date range (today, yesterday, last week, specific dates)
+- Filter by application (Chrome, VS Code, Terminal, etc.)
+- Combined filters (e.g., "GitHub activity in Chrome last week")
+
+When searching:
+- Use specific keywords from the user's query
+- Try date-based searches when time is mentioned
+- Combine filters for more precise results
+- If initial results are too broad, refine with additional filters
+
+Keep responses concise and focused on the activity data. Reference specific screenshots by their timestamp when relevant.
+"""
 }
