@@ -28,6 +28,9 @@ import {
 } from "./learned-rules.js";
 import { SearchIndex } from "./search-index.js";
 import { createSearchTools } from "./search-tools.js";
+import { PhashManager } from "./phash.js";
+import { Type } from "@sinclair/typebox";
+import type { AgentTool } from "@mariozechner/pi-agent-core";
 
 const SYSTEM_PROMPT = `You are indexing screenshots for a personal activity search engine. Think like the person who took this screenshot - what terms would THEY use later to find this moment?
 
@@ -110,6 +113,7 @@ export class ActivityAgent {
   private model: Model<any>;
   private searchIndex: SearchIndex | null = null;
   private searchIndexEnabled: boolean;
+  private phashManager: PhashManager;
 
   private constructor(
     options: {
@@ -133,8 +137,11 @@ export class ActivityAgent {
     this.context = this.loadContext();
     this.rules = loadLearnedRules(this.rulesPath);
 
+    // Initialize phash manager for duplicate detection
+    this.phashManager = new PhashManager(this.dataDir);
+
     // Initialize agent with rules-enhanced prompt
-    this.model = options.model || getModel("anthropic", "claude-sonnet-4-20250514");
+    this.model = options.model || getModel("anthropic", "claude-haiku-4-5");
 
     this.agent = new Agent({
       initialState: {
@@ -338,8 +345,23 @@ Extract all structured information from this screenshot.`;
 
   /**
    * Process a screenshot and add to context
+   * Returns null if screenshot is a duplicate (similar to recent screenshot)
    */
-  async processScreenshot(screenshot: ScreenshotInfo): Promise<ActivityEntry> {
+  async processScreenshot(screenshot: ScreenshotInfo): Promise<ActivityEntry | null> {
+    // Check for perceptual similarity to recent screenshots
+    const phashResult = await this.phashManager.checkAndAdd(
+      screenshot.path,
+      screenshot.filename,
+      screenshot.timestamp
+    );
+
+    if (phashResult.isDuplicate) {
+      // Skip duplicate - just mark as processed
+      this.context.lastProcessed = screenshot.filename;
+      this.saveContext();
+      return null;
+    }
+
     const entry = await this.analyzeScreenshot(screenshot);
 
     // Add to context
@@ -360,6 +382,25 @@ Extract all structured information from this screenshot.`;
     this.saveContext();
 
     return entry;
+  }
+
+  /**
+   * Check if a screenshot is similar to recent ones without processing
+   */
+  async isDuplicate(screenshot: ScreenshotInfo): Promise<{ isDuplicate: boolean; similarTo?: string }> {
+    const result = await this.phashManager.checkAndAdd(
+      screenshot.path,
+      screenshot.filename,
+      screenshot.timestamp
+    );
+    return { isDuplicate: result.isDuplicate, similarTo: result.similarTo };
+  }
+
+  /**
+   * Get phash stats
+   */
+  getPhashStats(): { totalHashes: number; indexSizeBytes: number } {
+    return this.phashManager.getStats();
   }
 
   /**
@@ -952,5 +993,189 @@ Return JSON (no markdown):
       this.searchIndex.close();
       this.searchIndex = null;
     }
+  }
+
+  /**
+   * Create a chat agent for interactive conversation
+   * Returns an agent with search tools and feedback capabilities
+   */
+  createChatAgent(): Agent {
+    if (!this.searchIndex) {
+      throw new Error("Search index not enabled");
+    }
+
+    const searchTools = createSearchTools(this.searchIndex);
+    
+    // Add feedback tool
+    const feedbackTool: AgentTool = {
+      name: "update_rules",
+      label: "Update Rules",
+      description: "Update indexing or search rules based on user feedback. Use this when the user wants to teach the system something new, like 'remember that for VS Code always note the git branch' or 'CLI should match terminal'.",
+      parameters: Type.Object({
+        feedback: Type.String({ description: "The user's feedback about how to improve indexing or search" })
+      }),
+      execute: async (_toolCallId, rawParams) => {
+        const params = rawParams as { feedback: string };
+        const result = await this.processFeedback(params.feedback);
+        return {
+          content: [{ type: "text" as const, text: result.message }],
+          details: { success: result.success }
+        };
+      }
+    };
+
+    const showRulesTool: AgentTool = {
+      name: "show_rules",
+      label: "Show Rules",
+      description: "Show the current learned rules for indexing and search",
+      parameters: Type.Object({}),
+      execute: async (_toolCallId) => {
+        return {
+          content: [{ type: "text" as const, text: this.showRules() }],
+          details: {}
+        };
+      }
+    };
+
+    const undoTool: AgentTool = {
+      name: "undo_rule_change",
+      label: "Undo Rule Change",
+      description: "Undo the last rule change",
+      parameters: Type.Object({}),
+      execute: async (_toolCallId) => {
+        const result = this.undoLastChange();
+        return {
+          content: [{ type: "text" as const, text: result.message }],
+          details: { success: result.success }
+        };
+      }
+    };
+
+    const statusTool: AgentTool = {
+      name: "get_status",
+      label: "Get Status",
+      description: "Get the current status of the activity index (number of screenshots, entries, etc)",
+      parameters: Type.Object({}),
+      execute: async (_toolCallId) => {
+        const stats = this.getSearchIndexStats();
+        const entryCount = this.context.entries.length;
+        const lastProcessed = this.context.lastProcessed || "None";
+        
+        let text = `Activity Index Status:\n`;
+        text += `- Total entries: ${entryCount}\n`;
+        text += `- Last processed: ${lastProcessed}\n`;
+        if (stats) {
+          text += `- Apps tracked: ${stats.apps}\n`;
+          text += `- Days of data: ${stats.dates}\n`;
+          text += `- Index size: ${(stats.dbSizeBytes / 1024).toFixed(1)} KB\n`;
+        }
+        return {
+          content: [{ type: "text" as const, text }],
+          details: { entryCount }
+        };
+      }
+    };
+
+    const allTools: AgentTool[] = [...searchTools, feedbackTool, showRulesTool, undoTool, statusTool];
+
+    const chatAgent = new Agent({
+      initialState: {
+        systemPrompt: `You are a helpful assistant for searching and managing a personal activity tracker. The user has indexed screenshots of their computer activity.
+
+You can:
+1. SEARCH - Find past activities using various search tools
+2. TEACH - Learn new rules about how to index or search (use update_rules)
+3. MANAGE - Show current rules, undo changes, check status
+
+SEARCH TOOLS:
+- search_fulltext: Fast keyword search
+- search_by_date_range: Activities within a date range  
+- search_by_date: Activities for a specific date
+- search_by_app: Activities for a specific app
+- search_combined: Combine date + keywords + app
+- list_apps: See what apps are indexed
+- list_dates: See what dates have data
+
+MANAGEMENT TOOLS:
+- update_rules: Learn new indexing/search rules from feedback
+- show_rules: Display current learned rules
+- undo_rule_change: Revert the last rule change
+- get_status: Show index statistics
+
+For search queries, be smart about parsing:
+- "yesterday" = ${new Date(Date.now() - 86400000).toISOString().split("T")[0]}
+- "last week" = date range for past 7 days
+- "in VS Code" = filter by app
+
+Today's date is ${new Date().toISOString().split("T")[0]}.
+
+Be conversational but concise. When showing search results, summarize what you found.`,
+        model: this.model,
+        thinkingLevel: "off",
+        tools: allTools,
+        messages: [],
+      },
+    });
+
+    return chatAgent;
+  }
+
+  /**
+   * Chat with conversation history support
+   * history is an array of {role: "user"|"assistant", content: string}
+   */
+  async chat(
+    message: string,
+    history: Array<{ role: "user" | "assistant"; content: string }> = [],
+    onEvent?: (event: { type: string; content?: string }) => void
+  ): Promise<string> {
+    // Build prompt with history context
+    let prompt = message;
+    
+    if (history.length > 0) {
+      // Format history as context in the prompt
+      const historyText = history.map(msg => {
+        const role = msg.role === "user" ? "User" : "Assistant";
+        // Truncate long messages to save tokens
+        const content = msg.content.length > 500 
+          ? msg.content.slice(0, 500) + "..." 
+          : msg.content;
+        return `${role}: ${content}`;
+      }).join("\n\n");
+      
+      prompt = `Previous conversation:\n${historyText}\n\nUser: ${message}`;
+    }
+    
+    const chatAgent = this.createChatAgent();
+
+    if (onEvent) {
+      chatAgent.subscribe((event) => {
+        if (event.type === "message_update" && event.assistantMessageEvent?.type === "text_delta") {
+          onEvent({ type: "text", content: event.assistantMessageEvent.delta });
+        } else if (event.type === "tool_execution_start") {
+          onEvent({ type: "tool_start", content: event.toolName });
+        } else if (event.type === "tool_execution_end") {
+          onEvent({ type: "tool_end", content: event.toolName });
+        }
+      });
+    }
+
+    await chatAgent.prompt(prompt);
+
+    // Get the final response
+    const messages = chatAgent.state.messages;
+    const assistantMessages = messages.filter((m) => m.role === "assistant");
+    const lastAssistant = assistantMessages[assistantMessages.length - 1];
+
+    if (lastAssistant && "content" in lastAssistant) {
+      const textContent = lastAssistant.content.find(
+        (c): c is { type: "text"; text: string } => c.type === "text"
+      );
+      if (textContent) {
+        return textContent.text;
+      }
+    }
+
+    return "No response";
   }
 }

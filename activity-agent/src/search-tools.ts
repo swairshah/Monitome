@@ -15,6 +15,7 @@ function formatEntriesForAgent(entries: ActivityEntry[], maxEntries = 20): strin
   const lines = limited.map((e, i) => {
     const parts = [
       `[${i}] ${e.date} ${e.time} - ${e.app?.name || e.application}`,
+      `Screenshot: ${e.filename}`,
       `Activity: ${e.activity}`,
     ];
     if (e.browser?.url) parts.push(`URL: ${e.browser.url}`);

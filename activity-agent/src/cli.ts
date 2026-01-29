@@ -207,6 +207,27 @@ async function main() {
       break;
     }
 
+    case "chat": {
+      // Chat message with optional history
+      // Usage: activity-agent chat <message> [--history '<json>']
+      const historyIndex = args.indexOf("--history");
+      let historyJson: string | undefined;
+      let messageArgs = args;
+      
+      if (historyIndex !== -1 && args[historyIndex + 1]) {
+        historyJson = args[historyIndex + 1];
+        messageArgs = [...args.slice(0, historyIndex), ...args.slice(historyIndex + 2)];
+      }
+      
+      const message = messageArgs.join(" ");
+      if (!message) {
+        console.error("Usage: activity-agent chat <message> [--history '<json>']");
+        process.exit(1);
+      }
+      await chatMessage(dataDir, message, historyJson);
+      break;
+    }
+
     case "help":
     default: {
       showHelp();
@@ -225,6 +246,7 @@ Global Options:
   --data, -d <path>   Data directory (default: ~/Library/Application Support/Monitome)
 
 Commands:
+  chat <message>      Conversational interface - ask anything naturally
   process [limit]     Process new screenshots (optionally limit count)
   status              Show current processing status
   search <query>      Smart search - agent uses tools to find activities
@@ -242,11 +264,11 @@ Commands:
   help                Show this help
 
 Examples:
+  activity-agent chat "what was I working on yesterday?"
+  activity-agent chat "remember that for VS Code, always note the git branch"
+  activity-agent chat "show me the rules"
   activity-agent --data ~/screenshots status
-  activity-agent -d /path/to/data search "github repos"
   activity-agent search "what was I doing yesterday" --debug
-  activity-agent feedback "for Obsidian, always extract the vault name"
-  activity-agent undo
 
 Environment:
   ANTHROPIC_API_KEY   Required for the AI model
@@ -352,19 +374,29 @@ async function processScreenshots(dataDir: string, limit?: number) {
 
   console.log(`Found ${screenshots.length} new screenshots to process.`);
 
+  let processed = 0;
+  let skipped = 0;
+
   for (let i = 0; i < screenshots.length; i++) {
     const screenshot = screenshots[i];
     console.log(`\n[${i + 1}/${screenshots.length}] Processing: ${screenshot.filename}`);
 
     try {
       const entry = await agent.processScreenshot(screenshot);
-      console.log(formatEntry(entry));
+      if (entry === null) {
+        console.log(`  ⏭ Skipped (similar to recent screenshot)`);
+        skipped++;
+      } else {
+        console.log(formatEntry(entry));
+        processed++;
+      }
     } catch (error) {
       console.error(`  Error: ${error}`);
     }
   }
 
   console.log("\nDone processing.");
+  console.log(`  Processed: ${processed}, Skipped (duplicates): ${skipped}`);
 
   // Show summary
   const context = agent.getContext();
@@ -404,6 +436,12 @@ async function showStatus(dataDir: string) {
     console.log(`  Dates: ${stats.dates}`);
     console.log(`  DB size: ${(stats.dbSizeBytes / 1024).toFixed(1)} KB`);
   }
+
+  // Show phash stats
+  const phashStats = agent.getPhashStats();
+  console.log(`\nDuplicate Detection (pHash):`);
+  console.log(`  Hashes: ${phashStats.totalHashes}`);
+  console.log(`  Index size: ${(phashStats.indexSizeBytes / 1024).toFixed(1)} KB`);
 
   if (context.recentSummary) {
     console.log(`\nRecent summary:`);
@@ -608,6 +646,30 @@ async function listApps(dataDir: string) {
     const entries = agent.getEntriesByApp(app);
     console.log(`  ${app} (${entries.length} entries)`);
   }
+}
+
+async function chatMessage(dataDir: string, message: string, historyJson?: string) {
+  const agent = await ActivityAgent.create({ dataDir });
+  
+  // Parse history if provided
+  let history: Array<{ role: "user" | "assistant"; content: string }> = [];
+  if (historyJson) {
+    try {
+      history = JSON.parse(historyJson);
+    } catch {
+      // Ignore invalid JSON
+    }
+  }
+  
+  const response = await agent.chat(message, history, (event) => {
+    if (event.type === "tool_start") {
+      process.stdout.write(`[${event.content}] `);
+    } else if (event.type === "tool_end") {
+      process.stdout.write("✓ ");
+    }
+  });
+  
+  console.log("\n" + response);
 }
 
 main().catch((error) => {

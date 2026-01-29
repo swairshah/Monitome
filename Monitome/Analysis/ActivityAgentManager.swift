@@ -331,6 +331,73 @@ final class ActivityAgentManager: ObservableObject {
         }
     }
     
+    // MARK: - Feedback
+    
+    /// Submit natural language feedback to improve indexing/search
+    func submitFeedback(_ feedback: String) async -> String {
+        guard isAgentAvailable, !feedback.isEmpty else { 
+            return "Error: Agent not available or empty feedback"
+        }
+        
+        do {
+            let output = try await runAgent(["feedback", feedback])
+            return output.trimmingCharacters(in: .whitespacesAndNewlines)
+        } catch {
+            return "Error: \(error.localizedDescription)"
+        }
+    }
+    
+    /// Get current learned rules
+    func getRules() async -> String {
+        guard isAgentAvailable else { return "Error: Agent not available" }
+        
+        do {
+            let output = try await runAgent(["rules"])
+            return output.trimmingCharacters(in: .whitespacesAndNewlines)
+        } catch {
+            return "Error: \(error.localizedDescription)"
+        }
+    }
+    
+    /// Undo last rule change
+    func undoLastRuleChange() async -> String {
+        guard isAgentAvailable else { return "Error: Agent not available" }
+        
+        do {
+            let output = try await runAgent(["undo"])
+            return output.trimmingCharacters(in: .whitespacesAndNewlines)
+        } catch {
+            return "Error: \(error.localizedDescription)"
+        }
+    }
+    
+    /// Free-form chat - agent with tools handles everything
+    /// Pass conversation history for context
+    func chat(_ message: String, history: [(isUser: Bool, text: String)] = []) async -> String {
+        guard isAgentAvailable else { return "Agent not available. Check Settings for API key." }
+        
+        do {
+            var args = ["chat", message]
+            
+            // Add history if present (limit to last 10 turns to avoid token limits)
+            if !history.isEmpty {
+                let recentHistory = history.suffix(10)
+                let historyArray = recentHistory.map { item -> [String: String] in
+                    ["role": item.isUser ? "user" : "assistant", "content": item.text]
+                }
+                if let historyJson = try? JSONSerialization.data(withJSONObject: historyArray),
+                   let historyString = String(data: historyJson, encoding: .utf8) {
+                    args.append("--history")
+                    args.append(historyString)
+                }
+            }
+            
+            return try await runAgent(args)
+        } catch {
+            return "Error: \(error.localizedDescription)"
+        }
+    }
+    
     // MARK: - Private Helpers
     
     /// Get environment with API key

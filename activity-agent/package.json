@@ -15,10 +15,11 @@
     "process": "tsx src/cli.ts process"
   },
   "dependencies": {
-    "@mariozechner/pi-ai": "*",
     "@mariozechner/pi-agent-core": "*",
+    "@mariozechner/pi-ai": "*",
     "@sinclair/typebox": "^0.34.33",
-    "better-sqlite3": "^11.7.0"
+    "better-sqlite3": "^11.7.0",
+    "imghash": "^1.1.2"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",

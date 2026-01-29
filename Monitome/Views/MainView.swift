@@ -5,6 +5,11 @@
 
 import SwiftUI
 
+enum MainTab {
+    case search
+    case chat
+}
+
 struct MainView: View {
     @ObservedObject private var appState = AppState.shared
     @ObservedObject private var agentManager = ActivityAgentManager.shared
@@ -12,15 +17,15 @@ struct MainView: View {
     @State private var screenshots: [Screenshot] = []
     @State private var selectedScreenshot: Screenshot?
     @State private var showSettings = false
-    @State private var isSearching = false
     @State private var searchText = ""
     @State private var searchResults: [ActivitySearchResult] = []
     @State private var isSearchingInProgress = false
     @State private var showActivityLog = false
+    @State private var selectedTab: MainTab = .search
     @AppStorage("indexingEnabled") private var indexingEnabled = true
 
     private let columns = [
-        GridItem(.adaptive(minimum: 200, maximum: 300), spacing: 12)
+        GridItem(.adaptive(minimum: 280, maximum: 400), spacing: 16)
     ]
 
     var body: some View {
@@ -138,58 +143,47 @@ struct MainView: View {
             }
             .frame(minWidth: 250)
         } detail: {
-            // Detail area with toolbar
             VStack(spacing: 0) {
-                if isSearching {
-                    // Search view
-                    ActivitySearchView(
+                // Tab icons
+                HStack(spacing: 4) {
+                    Button(action: { selectedTab = .search }) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 14))
+                            .frame(width: 32, height: 24)
+                            .background(selectedTab == .search ? Color.accentColor.opacity(0.2) : Color.clear)
+                            .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                    
+                    Button(action: { selectedTab = .chat }) {
+                        Image(systemName: "bubble.left.and.bubble.right")
+                            .font(.system(size: 14))
+                            .frame(width: 32, height: 24)
+                            .background(selectedTab == .chat ? Color.accentColor.opacity(0.2) : Color.clear)
+                            .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                    
+                    Spacer()
+                }
+                .padding(.horizontal)
+                .padding(.top, 8)
+                
+                Divider()
+                    .padding(.top, 8)
+                
+                // Tab content
+                switch selectedTab {
+                case .search:
+                    SearchTabView(
                         searchText: $searchText,
                         searchResults: $searchResults,
                         isSearching: $isSearchingInProgress,
-                        selectedScreenshot: $selectedScreenshot,
-                        onClose: {
-                            isSearching = false
-                            searchText = ""
-                            searchResults = []
-                        }
+                        columns: columns,
+                        performSearch: performSearch
                     )
-                } else {
-                    // Screenshot grid
-                    if screenshots.isEmpty {
-                        ContentUnavailableView(
-                            "No Screenshots",
-                            systemImage: "photo.badge.plus",
-                            description: Text("Screenshots for this day will appear here")
-                        )
-                    } else {
-                        ScrollView {
-                            LazyVGrid(columns: columns, spacing: 12) {
-                                ForEach(screenshots) { screenshot in
-                                    ScreenshotCard(screenshot: screenshot)
-                                        .onTapGesture {
-                                            selectedScreenshot = screenshot
-                                        }
-                                }
-                            }
-                            .padding()
-                        }
-                    }
-                }
-            }
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button(action: {
-                        isSearching.toggle()
-                        if !isSearching {
-                            searchText = ""
-                            searchResults = []
-                        }
-                    }) {
-                        Image(systemName: isSearching ? "xmark.circle.fill" : "magnifyingglass")
-                            .foregroundColor(isSearching ? .red : .secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .help(isSearching ? "Close Search" : "Search Screenshots")
+                case .chat:
+                    AgentChatView()
                 }
             }
         }
@@ -226,6 +220,19 @@ struct MainView: View {
             }
         }
     }
+    
+    private func performSearch() {
+        guard !searchText.isEmpty else { return }
+        isSearchingInProgress = true
+        
+        Task {
+            let results = await agentManager.searchFTS(searchText)
+            await MainActor.run {
+                searchResults = results
+                isSearchingInProgress = false
+            }
+        }
+    }
 
     private func loadScreenshots(for date: Date) {
         screenshots = StorageManager.shared.fetchForDay(date)
@@ -251,6 +258,527 @@ struct MainView: View {
         } else {
             return String(format: "%.2f GB", mb / 1024)
         }
+    }
+}
+
+// MARK: - Search Tab View
+
+struct SearchTabView: View {
+    @Binding var searchText: String
+    @Binding var searchResults: [ActivitySearchResult]
+    @Binding var isSearching: Bool
+    let columns: [GridItem]
+    let performSearch: () -> Void
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Search bar
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.secondary)
+                TextField("Search your activity...", text: $searchText)
+                    .textFieldStyle(.plain)
+                    .onSubmit {
+                        performSearch()
+                    }
+                if isSearching {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                }
+                if !searchText.isEmpty && !isSearching {
+                    Button(action: { searchText = ""; searchResults = [] }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(12)
+            .background(Color.gray.opacity(0.1))
+            .cornerRadius(10)
+            .padding(.horizontal)
+            .padding(.top, 8)
+            
+            // Results or empty state
+            if searchResults.isEmpty && !searchText.isEmpty && !isSearching {
+                Spacer()
+                ContentUnavailableView(
+                    "No Results",
+                    systemImage: "magnifyingglass.circle",
+                    description: Text("No activities match '\(searchText)'")
+                )
+                Spacer()
+            } else if searchResults.isEmpty && !isSearching {
+                Spacer()
+                VStack(spacing: 16) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 48))
+                        .foregroundColor(.secondary)
+                    Text("Search Your Activity")
+                        .font(.headline)
+                    Text("Try: \"github repo\", \"yesterday in VS Code\", \"that article about typescript\"")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                Spacer()
+            } else {
+                ScrollView {
+                    HStack {
+                        Text("\(searchResults.count) results")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+                    
+                    LazyVGrid(columns: columns, spacing: 16) {
+                        ForEach(searchResults) { result in
+                            ActivityResultCard(result: result)
+                        }
+                    }
+                    .padding()
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Agent Chat View
+
+struct ChatMessage: Identifiable, Codable {
+    var id = UUID()
+    let isUser: Bool
+    let text: String
+    var screenshots: [String] = []
+    var timestamp: Date = Date()
+}
+
+class ChatHistory: ObservableObject {
+    static let shared = ChatHistory()
+    
+    @Published var messages: [ChatMessage] = []
+    
+    private let historyURL: URL
+    
+    private init() {
+        let appSupport = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Monitome")
+        historyURL = appSupport.appendingPathComponent("chat-history.json")
+        load()
+    }
+    
+    func load() {
+        guard FileManager.default.fileExists(atPath: historyURL.path) else { return }
+        do {
+            let data = try Data(contentsOf: historyURL)
+            messages = try JSONDecoder().decode([ChatMessage].self, from: data)
+        } catch {
+            print("Failed to load chat history: \(error)")
+        }
+    }
+    
+    func save() {
+        do {
+            let data = try JSONEncoder().encode(messages)
+            try data.write(to: historyURL)
+        } catch {
+            print("Failed to save chat history: \(error)")
+        }
+    }
+    
+    func addMessage(_ message: ChatMessage) {
+        messages.append(message)
+        save()
+    }
+    
+    func clear() {
+        messages.removeAll()
+        save()
+    }
+}
+
+struct AgentChatView: View {
+    @ObservedObject private var agentManager = ActivityAgentManager.shared
+    @ObservedObject private var chatHistory = ChatHistory.shared
+    @State private var inputText = ""
+    @State private var isProcessing = false
+    @FocusState private var isInputFocused: Bool
+    
+    private let dataDir = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Application Support/Monitome/recordings")
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Messages
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 16) {
+                        if chatHistory.messages.isEmpty {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Ask anything about your activity")
+                                    .font(.headline)
+                                
+                                Text("Search:")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                Text("\"What was I working on yesterday?\"\n\"Show me GitHub activity from last week\"\n\"Find that article about TypeScript\"")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                
+                                Text("Teach:")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                    .padding(.top, 4)
+                                Text("\"Remember that for VS Code, always note the git branch\"\n\"CLI should also match terminal and command line\"\n\"Show me the current rules\"")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        
+                        ForEach(chatHistory.messages) { message in
+                            ChatBubble(message: message, dataDir: dataDir)
+                                .id(message.id)
+                        }
+                        
+                        if isProcessing {
+                            HStack(spacing: 8) {
+                                ProgressView()
+                                    .scaleEffect(0.7)
+                                Text("Thinking...")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    .padding()
+                }
+                .onChange(of: chatHistory.messages.count) { _, _ in
+                    if let last = chatHistory.messages.last {
+                        withAnimation {
+                            proxy.scrollTo(last.id, anchor: .bottom)
+                        }
+                    }
+                }
+            }
+            
+            Divider()
+            
+            // Input + clear button
+            HStack(spacing: 8) {
+                if !chatHistory.messages.isEmpty {
+                    Button(action: { chatHistory.clear() }) {
+                        Image(systemName: "trash")
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Clear chat history")
+                }
+                
+                TextField("Ask anything...", text: $inputText)
+                    .textFieldStyle(.plain)
+                    .focused($isInputFocused)
+                    .onSubmit { sendMessage() }
+                
+                Button(action: sendMessage) {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.title2)
+                        .foregroundColor(inputText.isEmpty || isProcessing ? .secondary : .accentColor)
+                }
+                .buttonStyle(.plain)
+                .disabled(inputText.isEmpty || isProcessing)
+            }
+            .padding(12)
+        }
+        .onAppear {
+            isInputFocused = true
+            // Scroll to bottom on appear
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                // trigger scroll
+            }
+        }
+    }
+    
+    private func sendMessage() {
+        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, !isProcessing else { return }
+        
+        chatHistory.addMessage(ChatMessage(isUser: true, text: text))
+        inputText = ""
+        isProcessing = true
+        
+        Task {
+            // Build history from previous messages (exclude the one we just added)
+            let history = chatHistory.messages.dropLast().map { (isUser: $0.isUser, text: $0.text) }
+            let response = await agentManager.chat(text, history: Array(history))
+            await MainActor.run {
+                // Extract screenshot filenames from response
+                let screenshots = extractScreenshots(from: response)
+                chatHistory.addMessage(ChatMessage(isUser: false, text: response, screenshots: screenshots))
+                isProcessing = false
+            }
+        }
+    }
+    
+    private func extractScreenshots(from text: String) -> [String] {
+        // Match patterns like: Screenshot: 20260127_143052123.jpg
+        let pattern = #"Screenshot:\s*(\d{8}_\d{9}\.jpg)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        
+        let range = NSRange(text.startIndex..., in: text)
+        let matches = regex.matches(in: text, range: range)
+        
+        return matches.compactMap { match in
+            guard let range = Range(match.range(at: 1), in: text) else { return nil }
+            return String(text[range])
+        }
+    }
+}
+
+struct ChatBubble: View {
+    let message: ChatMessage
+    let dataDir: URL
+    @State private var selectedScreenshot: String?
+    
+    var body: some View {
+        VStack(alignment: message.isUser ? .trailing : .leading, spacing: 8) {
+            Text(message.isUser ? "You" : "Agent")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            
+            if message.isUser {
+                Text(message.text)
+                    .padding(12)
+                    .background(Color.accentColor.opacity(0.15))
+                    .cornerRadius(12)
+                    .textSelection(.enabled)
+            } else {
+                // Parse and render agent response
+                let parsed = parseAgentResponse(message.text)
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    // Show tool calls as pills
+                    if !parsed.tools.isEmpty {
+                        HStack(spacing: 6) {
+                            ForEach(parsed.tools, id: \.self) { tool in
+                                HStack(spacing: 4) {
+                                    Image(systemName: toolIcon(for: tool))
+                                        .font(.caption2)
+                                    Text(toolLabel(for: tool))
+                                        .font(.caption2)
+                                }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.accentColor.opacity(0.15))
+                                .cornerRadius(12)
+                            }
+                        }
+                    }
+                    
+                    // Render markdown content
+                    Text(parseMarkdown(parsed.content))
+                        .textSelection(.enabled)
+                }
+                .padding(12)
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(12)
+            }
+            
+            // Show screenshot thumbnails if any
+            if !message.screenshots.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(message.screenshots.prefix(6), id: \.self) { filename in
+                            ScreenshotThumbnail(filename: filename, dataDir: dataDir)
+                                .onTapGesture {
+                                    selectedScreenshot = filename
+                                }
+                        }
+                        if message.screenshots.count > 6 {
+                            Text("+\(message.screenshots.count - 6)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .frame(width: 60, height: 40)
+                                .background(Color.gray.opacity(0.1))
+                                .cornerRadius(6)
+                        }
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: message.isUser ? .trailing : .leading)
+        .sheet(item: $selectedScreenshot) { filename in
+            ChatScreenshotDetailView(filename: filename, dataDir: dataDir)
+        }
+    }
+    
+    private struct ParsedResponse {
+        var tools: [String]
+        var content: String
+    }
+    
+    private func parseAgentResponse(_ text: String) -> ParsedResponse {
+        var tools: [String] = []
+        var content = text
+        
+        // Extract tool calls like "[search_fulltext] ✓" or "[get_status] ✓"
+        let pattern = #"\[([\w_]+)\]\s*[✓✗]?\s*"#
+        if let regex = try? NSRegularExpression(pattern: pattern) {
+            let range = NSRange(text.startIndex..., in: text)
+            let matches = regex.matches(in: text, range: range)
+            
+            for match in matches {
+                if let toolRange = Range(match.range(at: 1), in: text) {
+                    tools.append(String(text[toolRange]))
+                }
+            }
+            
+            // Remove tool prefixes from content
+            content = regex.stringByReplacingMatches(in: text, range: range, withTemplate: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        
+        return ParsedResponse(tools: tools, content: content)
+    }
+    
+    private func parseMarkdown(_ text: String) -> AttributedString {
+        do {
+            var options = AttributedString.MarkdownParsingOptions()
+            options.interpretedSyntax = .inlineOnlyPreservingWhitespace
+            var attributed = try AttributedString(markdown: text, options: options)
+            
+            // Make URLs clickable - find URLs in the text and add link attributes
+            let urlPattern = #"https?://[^\s\)\]\>]+"#
+            if let regex = try? NSRegularExpression(pattern: urlPattern) {
+                let nsString = text as NSString
+                let matches = regex.matches(in: text, range: NSRange(location: 0, length: nsString.length))
+                
+                for match in matches {
+                    if let range = Range(match.range, in: text),
+                       let url = URL(string: String(text[range])),
+                       let attrRange = attributed.range(of: String(text[range])) {
+                        attributed[attrRange].link = url
+                        attributed[attrRange].foregroundColor = .accentColor
+                    }
+                }
+            }
+            
+            return attributed
+        } catch {
+            return AttributedString(text)
+        }
+    }
+    
+    private func toolIcon(for tool: String) -> String {
+        switch tool {
+        case "search_fulltext", "search_combined": return "magnifyingglass"
+        case "search_by_date", "search_by_date_range": return "calendar"
+        case "search_by_app": return "app"
+        case "get_status": return "chart.bar"
+        case "show_rules": return "list.bullet"
+        case "update_rules": return "pencil"
+        case "undo_rule_change": return "arrow.uturn.backward"
+        case "list_apps": return "square.grid.2x2"
+        case "list_dates": return "calendar.badge.clock"
+        default: return "gearshape"
+        }
+    }
+    
+    private func toolLabel(for tool: String) -> String {
+        switch tool {
+        case "search_fulltext": return "Search"
+        case "search_combined": return "Search"
+        case "search_by_date": return "By Date"
+        case "search_by_date_range": return "Date Range"
+        case "search_by_app": return "By App"
+        case "get_status": return "Status"
+        case "show_rules": return "Rules"
+        case "update_rules": return "Update Rules"
+        case "undo_rule_change": return "Undo"
+        case "list_apps": return "Apps"
+        case "list_dates": return "Dates"
+        default: return tool.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+    }
+}
+
+extension String: @retroactive Identifiable {
+    public var id: String { self }
+}
+
+struct ScreenshotThumbnail: View {
+    let filename: String
+    let dataDir: URL
+    
+    var body: some View {
+        let imagePath = dataDir.appendingPathComponent(filename)
+        
+        Group {
+            if let nsImage = NSImage(contentsOf: imagePath) {
+                Image(nsImage: nsImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 80, height: 50)
+                    .clipped()
+                    .cornerRadius(6)
+            } else {
+                Rectangle()
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(width: 80, height: 50)
+                    .cornerRadius(6)
+                    .overlay(
+                        Image(systemName: "photo")
+                            .foregroundColor(.secondary)
+                    )
+            }
+        }
+    }
+}
+
+struct ChatScreenshotDetailView: View {
+    let filename: String
+    let dataDir: URL
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        let imagePath = dataDir.appendingPathComponent(filename)
+        
+        VStack {
+            HStack {
+                Text(formatFilename(filename))
+                    .font(.headline)
+                Spacer()
+                Button("Done") { dismiss() }
+            }
+            .padding()
+            
+            if let nsImage = NSImage(contentsOf: imagePath) {
+                Image(nsImage: nsImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+            } else {
+                ContentUnavailableView("Image not found", systemImage: "photo")
+            }
+        }
+        .frame(minWidth: 600, minHeight: 400)
+    }
+    
+    private func formatFilename(_ filename: String) -> String {
+        // 20260127_143052123.jpg -> 2026-01-27 14:30:52
+        let name = filename.replacingOccurrences(of: ".jpg", with: "")
+        guard name.count >= 15 else { return filename }
+        
+        let year = name.prefix(4)
+        let month = name.dropFirst(4).prefix(2)
+        let day = name.dropFirst(6).prefix(2)
+        let hour = name.dropFirst(9).prefix(2)
+        let min = name.dropFirst(11).prefix(2)
+        let sec = name.dropFirst(13).prefix(2)
+        
+        return "\(year)-\(month)-\(day) \(hour):\(min):\(sec)"
     }
 }
 
