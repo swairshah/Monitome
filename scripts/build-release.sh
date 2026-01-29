@@ -32,6 +32,33 @@ bun build src/cli.ts --compile --outfile dist/activity-agent
 echo "Building extension..."
 npm run build
 
+# 2. Build Pi binary
+echo "Building Pi binary..."
+PI_BUILD_DIR="$DIST_DIR/pi-build"
+rm -rf "$PI_BUILD_DIR"
+mkdir -p "$PI_BUILD_DIR"
+
+# Get pi package location (from npm global or nvm)
+PI_PKG_DIR=$(node -e "console.log(require.resolve('@mariozechner/pi-coding-agent/package.json').replace('/package.json', ''))" 2>/dev/null || echo "")
+if [ -z "$PI_PKG_DIR" ] || [ ! -d "$PI_PKG_DIR" ]; then
+    # Fallback to nvm location
+    PI_PKG_DIR="$HOME/.nvm/versions/node/v22.16.0/lib/node_modules/@mariozechner/pi-coding-agent"
+fi
+
+if [ ! -d "$PI_PKG_DIR" ]; then
+    echo "Error: Pi package not found. Install with: npm i -g @mariozechner/pi-coding-agent"
+    exit 1
+fi
+
+echo "Using Pi from: $PI_PKG_DIR"
+cp -r "$PI_PKG_DIR"/* "$PI_BUILD_DIR/"
+cd "$PI_BUILD_DIR"
+bun build dist/cli.js --compile --outfile pi
+
+# Copy theme files (required at runtime)
+mkdir -p "$PI_BUILD_DIR/theme"
+cp "$PI_PKG_DIR/dist/modes/interactive/theme"/*.json "$PI_BUILD_DIR/theme/"
+
 # 2. Build the Swift app (Release)
 echo "Building Swift app..."
 cd "$PROJECT_DIR"
@@ -63,10 +90,23 @@ chmod +x "$APP_BUNDLE/Contents/MacOS/activity-agent"
 # Remove any stray copy in Resources (Xcode might copy it there)
 rm -f "$APP_BUNDLE/Contents/Resources/activity-agent"
 
-# 4b. Copy Pi extension into Resources
-echo "Bundling Pi extension..."
+# 4b. Copy Pi binary and extension into the app bundle
+echo "Bundling Pi..."
+cp "$PI_BUILD_DIR/pi" "$APP_BUNDLE/Contents/MacOS/"
+chmod +x "$APP_BUNDLE/Contents/MacOS/pi"
+
+# Copy theme files to Resources and symlink from MacOS (Pi looks relative to binary)
+mkdir -p "$APP_BUNDLE/Contents/Resources/pi-theme"
+cp "$PI_BUILD_DIR/theme"/*.json "$APP_BUNDLE/Contents/Resources/pi-theme/"
+ln -s ../Resources/pi-theme "$APP_BUNDLE/Contents/MacOS/theme"
+
+# Copy package.json to Resources and symlink (Pi reads version from it)
+cp "$PI_BUILD_DIR/package.json" "$APP_BUNDLE/Contents/Resources/"
+ln -s ../Resources/package.json "$APP_BUNDLE/Contents/MacOS/package.json"
+
+# Copy bundled extension (self-contained, no external imports except better-sqlite3)
 mkdir -p "$APP_BUNDLE/Contents/Resources/extensions/monitome-search"
-cp "$PROJECT_DIR/activity-agent/dist/extension/index.js" "$APP_BUNDLE/Contents/Resources/extensions/monitome-search/"
+cp "$PROJECT_DIR/activity-agent/dist/extension-bundle.js" "$APP_BUNDLE/Contents/Resources/extensions/monitome-search/index.js"
 
 # 5. Sign the main app binary with hardened runtime
 echo "Signing main app binary..."
@@ -83,6 +123,12 @@ echo "Signing activity-agent binary (with JIT entitlements)..."
 codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" \
     --entitlements "$PROJECT_DIR/activity-agent/entitlements.plist" \
     "$APP_BUNDLE/Contents/MacOS/activity-agent"
+
+# 7b. Sign Pi binary WITH hardened runtime AND JIT entitlements
+echo "Signing Pi binary (with JIT entitlements)..."
+codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" \
+    --entitlements "$PROJECT_DIR/activity-agent/entitlements.plist" \
+    "$APP_BUNDLE/Contents/MacOS/pi"
 
 # 8. Sign the app bundle (not deep, preserve individual signatures)
 echo "Signing app bundle..."

@@ -45,22 +45,21 @@ final class PiAgentManager: ObservableObject {
         // Create session directory if needed
         try? FileManager.default.createDirectory(at: sessionDir, withIntermediateDirectories: true)
         
-        // Look for pi in common locations
+        // Look for pi in common locations - prefer bundled binary
         let bundleMacOS = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/pi").path
-        let bundleResources = Bundle.main.resourcePath.map { $0 + "/pi" } ?? ""
         
         let possiblePiPaths = [
+            // Bundled in app (release builds)
             bundleMacOS,
-            bundleResources,
-            // Development: nvm-installed pi (most likely)
+            // Development: nvm-installed pi
             NSHomeDirectory() + "/.nvm/versions/node/v22.16.0/bin/pi",
-            // Homebrew paths
+            // Homebrew/global installs
             "/opt/homebrew/bin/pi",
             "/usr/local/bin/pi",
         ]
         
         let foundPiPath = possiblePiPaths.first { FileManager.default.fileExists(atPath: $0) }
-        self.piPath = foundPiPath ?? "/opt/homebrew/bin/pi"
+        self.piPath = foundPiPath ?? bundleMacOS
         
         // Look for extension
         let bundleExtension = Bundle.main.resourcePath.map { $0 + "/extensions/monitome-search/index.js" } ?? ""
@@ -138,23 +137,30 @@ final class PiAgentManager: ObservableObject {
     
     private func runPi(message: String, continueSession: Bool) async throws -> String {
         let process = Process()
-        
-        // Use /bin/zsh to run pi with homebrew node (matches native module compilation)
-        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        
         let piArgs = buildPiArgs(message: message, continueSession: continueSession)
-        let escapedArgs = piArgs.map { arg in
-            // Escape quotes in arguments
-            "'\(arg.replacingOccurrences(of: "'", with: "'\\''"))'"
-        }.joined(separator: " ")
         
-        // Use homebrew node to match the native module compilation
-        // Native modules must be run with the same Node version they were compiled with
-        let shellCommand = """
-        export PATH="/opt/homebrew/bin:$PATH"
-        node "\(piPath)" \(escapedArgs)
-        """
-        process.arguments = ["-c", shellCommand]
+        // Check if using bundled binary (in app bundle) vs system-installed pi
+        let bundleMacOS = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/pi").path
+        let isBundled = piPath == bundleMacOS && FileManager.default.fileExists(atPath: bundleMacOS)
+        
+        if isBundled {
+            // Bundled binary - run directly
+            process.executableURL = URL(fileURLWithPath: piPath)
+            process.arguments = piArgs
+        } else {
+            // System-installed pi (nvm/homebrew) - needs shell for PATH
+            process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+            
+            let escapedArgs = piArgs.map { arg in
+                "'\(arg.replacingOccurrences(of: "'", with: "'\\''"))'"
+            }.joined(separator: " ")
+            
+            let shellCommand = """
+            export PATH="/opt/homebrew/bin:$HOME/.nvm/versions/node/v22.16.0/bin:$PATH"
+            "\(piPath)" \(escapedArgs)
+            """
+            process.arguments = ["-c", shellCommand]
+        }
         
         process.environment = getEnvironment()
         process.currentDirectoryURL = dataDir

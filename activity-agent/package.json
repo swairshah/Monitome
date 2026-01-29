@@ -6,8 +6,9 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && npm run build:extension",
     "build:binary": "bun build src/cli.ts --compile --outfile dist/activity-agent",
+    "build:extension": "bun build src/extension/index.ts --outfile dist/extension-bundle.js --target node --format esm --external better-sqlite3",
     "dev": "tsc --watch",
     "clean": "rm -rf dist",
     "check": "tsc --noEmit",
