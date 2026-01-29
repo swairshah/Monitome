@@ -22,6 +22,7 @@
     "imghash": "^1.1.2"
   },
   "devDependencies": {
+    "@mariozechner/pi-coding-agent": "*",
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.10.5",
     "tsx": "^4.20.3",
