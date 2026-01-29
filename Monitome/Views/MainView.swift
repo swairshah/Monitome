@@ -401,10 +401,16 @@ class ChatHistory: ObservableObject {
 
 struct AgentChatView: View {
     @ObservedObject private var piAgent = PiAgentManager.shared
+    @ObservedObject private var activityAgent = ActivityAgentManager.shared
     @ObservedObject private var chatHistory = ChatHistory.shared
     @State private var inputText = ""
     @State private var isProcessing = false
     @FocusState private var isInputFocused: Bool
+    
+    /// Use Pi if available, otherwise fall back to activity-agent
+    private var usePi: Bool {
+        piAgent.isPiAvailable && piAgent.isExtensionAvailable
+    }
     
     private let dataDir = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent("Library/Application Support/Monitome/recordings")
@@ -511,8 +517,15 @@ struct AgentChatView: View {
         isProcessing = true
         
         Task {
-            // Pi handles session persistence internally via --continue
-            let response = await piAgent.chat(text)
+            let response: String
+            if usePi {
+                // Pi handles session persistence internally via --continue
+                response = await piAgent.chat(text)
+            } else {
+                // Fall back to activity-agent chat
+                let history = chatHistory.messages.dropLast().map { (isUser: $0.isUser, text: $0.text) }
+                response = await activityAgent.chat(text, history: Array(history))
+            }
             await MainActor.run {
                 // Extract screenshot filenames from response
                 let screenshots = extractScreenshots(from: response)

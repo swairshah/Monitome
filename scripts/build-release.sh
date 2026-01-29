@@ -22,11 +22,15 @@ echo "Building $APP_NAME v$VERSION..."
 rm -rf "$DIST_DIR"
 mkdir -p "$DIST_DIR"
 
-# 1. Build the activity-agent binary
+# 1. Build the activity-agent binary and extension
 echo "Building activity-agent..."
 cd "$PROJECT_DIR/activity-agent"
 npm install --silent 2>/dev/null || true
 bun build src/cli.ts --compile --outfile dist/activity-agent
+
+# Build TypeScript (includes extension)
+echo "Building extension..."
+npm run build
 
 # 2. Build the Swift app (Release)
 echo "Building Swift app..."
@@ -58,6 +62,11 @@ chmod +x "$APP_BUNDLE/Contents/MacOS/activity-agent"
 
 # Remove any stray copy in Resources (Xcode might copy it there)
 rm -f "$APP_BUNDLE/Contents/Resources/activity-agent"
+
+# 4b. Copy Pi extension into Resources
+echo "Bundling Pi extension..."
+mkdir -p "$APP_BUNDLE/Contents/Resources/extensions/monitome-search"
+cp "$PROJECT_DIR/activity-agent/dist/extension/index.js" "$APP_BUNDLE/Contents/Resources/extensions/monitome-search/"
 
 # 5. Sign the main app binary with hardened runtime
 echo "Signing main app binary..."

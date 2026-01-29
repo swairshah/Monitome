@@ -59,9 +59,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 AppState.shared.isRecording = savedPref
 
                 // Request accessibility permission for browser tab detection
+                // Skip in DEBUG builds to avoid repeated prompts (code signature changes)
+                #if !DEBUG
                 if !eventMonitor.hasAccessibilityPermission {
                     eventMonitor.requestAccessibilityPermission()
                 }
+                #endif
             } catch {
                 print("Screen recording permission not granted")
                 AppState.shared.isRecording = false

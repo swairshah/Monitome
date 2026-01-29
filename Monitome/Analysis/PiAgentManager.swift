@@ -52,15 +52,15 @@ final class PiAgentManager: ObservableObject {
         let possiblePiPaths = [
             bundleMacOS,
             bundleResources,
-            // Development paths
-            NSHomeDirectory() + "/work/agents/pi-mono/packages/coding-agent/dist/cli.js",
-            "/usr/local/bin/pi",
+            // Development: nvm-installed pi (most likely)
+            NSHomeDirectory() + "/.nvm/versions/node/v22.16.0/bin/pi",
+            // Homebrew paths
             "/opt/homebrew/bin/pi",
-            NSHomeDirectory() + "/.nvm/versions/node/v22.16.0/bin/pi"
+            "/usr/local/bin/pi",
         ]
         
         let foundPiPath = possiblePiPaths.first { FileManager.default.fileExists(atPath: $0) }
-        self.piPath = foundPiPath ?? "/usr/local/bin/pi"
+        self.piPath = foundPiPath ?? "/opt/homebrew/bin/pi"
         
         // Look for extension
         let bundleExtension = Bundle.main.resourcePath.map { $0 + "/extensions/monitome-search/index.js" } ?? ""
@@ -139,17 +139,22 @@ final class PiAgentManager: ObservableObject {
     private func runPi(message: String, continueSession: Bool) async throws -> String {
         let process = Process()
         
-        // Check if piPath is a .js file (development) or binary
-        if piPath.hasSuffix(".js") {
-            // Run via node
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-            var args = ["node", piPath]
-            args += buildPiArgs(message: message, continueSession: continueSession)
-            process.arguments = args
-        } else {
-            process.executableURL = URL(fileURLWithPath: piPath)
-            process.arguments = buildPiArgs(message: message, continueSession: continueSession)
-        }
+        // Use /bin/zsh to run pi with homebrew node (matches native module compilation)
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        
+        let piArgs = buildPiArgs(message: message, continueSession: continueSession)
+        let escapedArgs = piArgs.map { arg in
+            // Escape quotes in arguments
+            "'\(arg.replacingOccurrences(of: "'", with: "'\\''"))'"
+        }.joined(separator: " ")
+        
+        // Use homebrew node to match the native module compilation
+        // Native modules must be run with the same Node version they were compiled with
+        let shellCommand = """
+        export PATH="/opt/homebrew/bin:$PATH"
+        node "\(piPath)" \(escapedArgs)
+        """
+        process.arguments = ["-c", shellCommand]
         
         process.environment = getEnvironment()
         process.currentDirectoryURL = dataDir
