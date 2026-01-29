@@ -82,6 +82,7 @@ activity-agent/dist/
 activity-agent/node_modules/
 activity-agent/*.db
 activity-agent/data/
+activity-agent/activity-agent
 
 # Binaries (copied at build time)
 Monitome/Binaries/
