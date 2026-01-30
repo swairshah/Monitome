@@ -22,19 +22,29 @@ echo "Building $APP_NAME v$VERSION..."
 rm -rf "$DIST_DIR"
 mkdir -p "$DIST_DIR"
 
-# 1. Build the activity-agent binary
-echo "Building activity-agent..."
+# 1. Build the activity-agent binary (Universal: ARM64 + x86_64)
+echo "Building activity-agent (universal binary)..."
 cd "$PROJECT_DIR/activity-agent"
 npm install --silent 2>/dev/null || true
-bun build src/cli.ts --compile --outfile dist/activity-agent
 
-# 2. Build the Swift app (Release)
-echo "Building Swift app..."
+# Build for both architectures
+echo "  Building for ARM64..."
+bun build src/cli.ts --compile --target=bun-darwin-arm64 --outfile dist/activity-agent-arm64
+echo "  Building for x86_64..."
+bun build src/cli.ts --compile --target=bun-darwin-x64 --outfile dist/activity-agent-x64
+echo "  Creating universal binary..."
+lipo -create -output dist/activity-agent dist/activity-agent-arm64 dist/activity-agent-x64
+rm dist/activity-agent-arm64 dist/activity-agent-x64
+
+# 2. Build the Swift app (Release, Universal binary)
+echo "Building Swift app (universal binary)..."
 cd "$PROJECT_DIR"
 xcodebuild -project Monitome.xcodeproj \
     -scheme Monitome \
     -configuration Release \
     -derivedDataPath "$DIST_DIR/build" \
+    -arch arm64 -arch x86_64 \
+    ONLY_ACTIVE_ARCH=NO \
     clean build \
     CODE_SIGN_IDENTITY="$SIGN_IDENTITY" \
     DEVELOPMENT_TEAM="$TEAM_ID" \
