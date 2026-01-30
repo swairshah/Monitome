@@ -508,13 +508,16 @@ struct DayActivityCard: View {
                         .lineLimit(4)
                 }
                 
-                // URL if available
-                if let url = activity.url, !url.isEmpty {
-                    Text(url)
-                        .font(.caption2)
-                        .foregroundColor(.blue)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                // URL if available (clickable)
+                if let urlString = activity.url, !urlString.isEmpty,
+                   let url = URL(string: urlString) {
+                    Link(destination: url) {
+                        Text(urlString)
+                            .font(.caption2)
+                            .foregroundColor(.blue)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
                 }
                 
                 // Tags
@@ -536,7 +539,9 @@ struct DayActivityCard: View {
             .frame(minHeight: 100)
             
             // Show screenshot button
-            Button(action: { showScreenshot = true }) {
+            Button {
+                showScreenshot = true
+            } label: {
                 HStack {
                     Image(systemName: "photo")
                     Text("View Screenshot")
@@ -550,6 +555,7 @@ struct DayActivityCard: View {
         .padding(12)
         .background(Color.gray.opacity(0.1))
         .cornerRadius(12)
+        .contentShape(Rectangle())  // Ensure entire card is tappable
         .sheet(isPresented: $showScreenshot) {
             ActivityDetailView(result: activity)
         }

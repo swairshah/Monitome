@@ -542,11 +542,14 @@ async function showDate(dataDir: string, date: string) {
     return;
   }
 
-  console.log(`Activity for ${date} (${entries.length} entries)`);
+  // Consolidate similar consecutive entries
+  const consolidated = consolidateEntries(entries);
+
+  console.log(`Activity for ${date} (${consolidated.length} activities from ${entries.length} screenshots)`);
   console.log("=".repeat(50));
 
   let currentApp = "";
-  for (const entry of entries) {
+  for (const entry of consolidated) {
     const appName = entry.app?.name || entry.application;
     if (appName !== currentApp) {
       currentApp = appName;
@@ -556,6 +559,68 @@ async function showDate(dataDir: string, date: string) {
     console.log(formatEntry(entry));
     console.log();
   }
+}
+
+/**
+ * Consolidate consecutive entries with similar activity into single entries.
+ * Keeps the first entry of each group.
+ */
+function consolidateEntries(entries: ActivityEntry[]): ActivityEntry[] {
+  if (entries.length === 0) return [];
+
+  const result: ActivityEntry[] = [];
+  let current = entries[0];
+
+  for (let i = 1; i < entries.length; i++) {
+    const next = entries[i];
+    
+    // Check if this is a continuation of the same activity
+    const sameApp = (current.app?.name || current.application) === (next.app?.name || next.application);
+    const sameUrl = current.browser?.url === next.browser?.url;
+    const similarActivity = isSimilarActivity(current.activity, next.activity);
+    
+    if (sameApp && (sameUrl || similarActivity)) {
+      // Skip this entry - it's a continuation
+      continue;
+    } else {
+      // Different activity - save current and move to next
+      result.push(current);
+      current = next;
+    }
+  }
+  
+  // Don't forget the last entry
+  result.push(current);
+  
+  return result;
+}
+
+/**
+ * Check if two activity descriptions are similar enough to be considered the same.
+ */
+function isSimilarActivity(a: string, b: string): boolean {
+  // Normalize and compare
+  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, ' ').trim();
+  const na = normalize(a);
+  const nb = normalize(b);
+  
+  // If one contains the other, they're similar
+  if (na.includes(nb) || nb.includes(na)) return true;
+  
+  // Check word overlap
+  const wordsA = new Set(na.split(/\s+/).filter(w => w.length > 3));
+  const wordsB = new Set(nb.split(/\s+/).filter(w => w.length > 3));
+  
+  if (wordsA.size === 0 || wordsB.size === 0) return false;
+  
+  let overlap = 0;
+  for (const word of wordsA) {
+    if (wordsB.has(word)) overlap++;
+  }
+  
+  // If more than 50% of words overlap, consider them similar
+  const overlapRatio = overlap / Math.min(wordsA.size, wordsB.size);
+  return overlapRatio > 0.5;
 }
 
 async function processFeedback(dataDir: string, feedback: string) {
