@@ -389,6 +389,8 @@ struct DayActivityView: View {
     let isLoading: Bool
     let onClose: () -> Void
     
+    @State private var selectedActivity: ActivitySearchResult?
+    
     private let columns = [
         GridItem(.adaptive(minimum: 280, maximum: 400), spacing: 16)
     ]
@@ -429,7 +431,7 @@ struct DayActivityView: View {
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 16) {
                         ForEach(activities) { activity in
-                            DayActivityCard(activity: activity)
+                            DayActivityCard(activity: activity, selectedActivity: $selectedActivity)
                         }
                     }
                     .padding()
@@ -467,6 +469,9 @@ struct DayActivityView: View {
                 Spacer()
             }
         }
+        .sheet(item: $selectedActivity) { activity in
+            ActivityDetailView(result: activity)
+        }
     }
 }
 
@@ -474,8 +479,7 @@ struct DayActivityView: View {
 
 struct DayActivityCard: View {
     let activity: ActivitySearchResult
-    @State private var isHovered = false
-    @State private var showScreenshot = false
+    @Binding var selectedActivity: ActivitySearchResult?
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -540,7 +544,7 @@ struct DayActivityCard: View {
             
             // Show screenshot button
             Button {
-                showScreenshot = true
+                selectedActivity = activity
             } label: {
                 HStack {
                     Image(systemName: "photo")
@@ -555,10 +559,6 @@ struct DayActivityCard: View {
         .padding(12)
         .background(Color.gray.opacity(0.1))
         .cornerRadius(12)
-        .contentShape(Rectangle())  // Ensure entire card is tappable
-        .sheet(isPresented: $showScreenshot) {
-            ActivityDetailView(result: activity)
-        }
     }
 }
 
