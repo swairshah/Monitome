@@ -733,6 +733,14 @@ struct AgentChatView: View {
                         }
                     }
                 }
+                .onAppear {
+                    // Scroll to bottom on initial load
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        if let last = chatHistory.messages.last {
+                            proxy.scrollTo(last.id, anchor: .bottom)
+                        }
+                    }
+                }
             }
             
             Divider()
