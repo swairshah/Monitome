@@ -20,7 +20,7 @@
     "@mariozechner/pi-ai": "*",
     "@sinclair/typebox": "^0.34.33",
     "better-sqlite3": "^11.7.0",
-    "imghash": "^1.1.2"
+    "jimp": "^1.6.0"
   },
   "devDependencies": {
     "@mariozechner/pi-coding-agent": "*",

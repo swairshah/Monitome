@@ -1,10 +1,12 @@
-import imghash from "imghash";
+import { Jimp } from "jimp";
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
 
 /**
  * Perceptual hash storage and comparison
  * Used to detect similar/duplicate screenshots
+ * 
+ * Uses jimp for image processing (pure JS, works with Bun compile)
  */
 
 export interface PhashEntry {
@@ -19,8 +21,20 @@ export interface PhashIndex {
 }
 
 const PHASH_VERSION = 1;
-const HAMMING_THRESHOLD = 25; // Hashes within this distance are considered similar (256 bits total)
-const HASH_BITS = 16; // 16 bits = 64 char hex hash
+const HAMMING_THRESHOLD = 5; // Hashes within this distance are considered similar (64 bits total for base-16 hash)
+const HASH_BASE = 16; // Use base-16 (hex) hash - gives 64-bit hash
+
+/**
+ * Convert hex string to binary string
+ */
+function hexToBinary(hex: string): string {
+  let binary = "";
+  for (let i = 0; i < hex.length; i++) {
+    const nibble = parseInt(hex[i], 16);
+    binary += nibble.toString(2).padStart(4, "0");
+  }
+  return binary;
+}
 
 /**
  * Calculate hamming distance between two hex hash strings
@@ -29,8 +43,8 @@ function hammingDistance(hash1: string, hash2: string): number {
   if (hash1.length !== hash2.length) return Infinity;
   
   // Convert hex to binary and count differences
-  const bin1 = imghash.hexToBinary(hash1);
-  const bin2 = imghash.hexToBinary(hash2);
+  const bin1 = hexToBinary(hash1);
+  const bin2 = hexToBinary(hash2);
   
   let distance = 0;
   for (let i = 0; i < bin1.length; i++) {
@@ -72,10 +86,12 @@ export class PhashManager {
   }
 
   /**
-   * Compute perceptual hash for an image file
+   * Compute perceptual hash for an image file using jimp
    */
   async computeHash(imagePath: string): Promise<string> {
-    const hash = await imghash.hash(imagePath, HASH_BITS);
+    const buffer = readFileSync(imagePath);
+    const image = await Jimp.fromBuffer(buffer);
+    const hash = image.hash(HASH_BASE);
     return hash;
   }
 
