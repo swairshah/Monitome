@@ -29,6 +29,7 @@ import {
 import { SearchIndex } from "./search-index.js";
 import { createSearchTools } from "./search-tools.js";
 import { PhashManager } from "./phash.js";
+import { UserProfileManager, type ProfileEdit, type ProfileHistory } from "./user-profile.js";
 import { Type } from "@sinclair/typebox";
 import type { AgentTool } from "@mariozechner/pi-agent-core";
 
@@ -114,6 +115,8 @@ export class ActivityAgent {
   private searchIndex: SearchIndex | null = null;
   private searchIndexEnabled: boolean;
   private phashManager: PhashManager;
+  private profileManager: UserProfileManager;
+  private profileUpdateInterval: number;
 
   private constructor(
     options: {
@@ -123,6 +126,8 @@ export class ActivityAgent {
       rulesPath?: string;
       dbPath?: string;
       enableSearchIndex?: boolean;
+      /** How often to auto-update profile (in # of screenshots). Default: 100. Set to 0 to disable. */
+      profileUpdateInterval?: number;
     },
     searchIndex: SearchIndex | null
   ) {
@@ -142,6 +147,10 @@ export class ActivityAgent {
 
     // Initialize agent with rules-enhanced prompt
     this.model = options.model || getModel("anthropic", "claude-haiku-4-5");
+
+    // Initialize profile manager
+    this.profileManager = new UserProfileManager(this.dataDir, this.model);
+    this.profileUpdateInterval = options.profileUpdateInterval ?? 100;
 
     this.agent = new Agent({
       initialState: {
@@ -164,6 +173,8 @@ export class ActivityAgent {
     rulesPath?: string;
     dbPath?: string;
     enableSearchIndex?: boolean;
+    /** How often to auto-update profile (in # of screenshots). Default: 100. Set to 0 to disable. */
+    profileUpdateInterval?: number;
   }): Promise<ActivityAgent> {
     let searchIndex: SearchIndex | null = null;
     if (options.enableSearchIndex !== false) {
@@ -378,10 +389,31 @@ Extract all structured information from this screenshot.`;
       await this.updateSummary();
     }
 
+    // Update user profile periodically
+    if (this.profileUpdateInterval > 0 && this.context.entries.length % this.profileUpdateInterval === 0) {
+      await this.autoUpdateProfile();
+    }
+
     // Save context
     this.saveContext();
 
     return entry;
+  }
+
+  /**
+   * Automatically update profile (called during processing)
+   * Uses last 100 entries for the update
+   */
+  private async autoUpdateProfile(): Promise<void> {
+    const recentEntries = this.context.entries.slice(-100);
+    if (recentEntries.length === 0) return;
+
+    try {
+      await this.profileManager.updateProfile(recentEntries);
+    } catch (e) {
+      // Don't fail screenshot processing if profile update fails
+      console.error("Auto profile update failed:", e);
+    }
   }
 
   /**
@@ -1177,5 +1209,142 @@ Be conversational but concise. When showing search results, summarize what you f
     }
 
     return "No response";
+  }
+
+  // ============================================================
+  // User Profile Methods
+  // ============================================================
+
+  /**
+   * Get the current user profile content
+   */
+  getProfile(): string {
+    return this.profileManager.getProfile();
+  }
+
+  /**
+   * Get profile update history
+   */
+  getProfileHistory(): ProfileHistory {
+    return this.profileManager.getHistory();
+  }
+
+  /**
+   * Get recent profile edits for display
+   */
+  getRecentProfileEdits(count = 10): ProfileEdit[] {
+    return this.profileManager.getRecentEdits(count);
+  }
+
+  /**
+   * Format profile history for display
+   */
+  formatProfileHistory(count = 10): string {
+    return this.profileManager.formatHistory(count);
+  }
+
+  /**
+   * Update the user profile based on recent activity
+   * 
+   * @param hoursBack - How many hours of activity to analyze (default: 1)
+   * @param onEvent - Optional callback for streaming events
+   */
+  async updateProfile(
+    hoursBack = 1,
+    onEvent?: (event: { type: string; content?: string }) => void
+  ): Promise<{ success: boolean; summary: string; changed: boolean; entriesAnalyzed: number }> {
+    // Get entries from the last N hours
+    const cutoffTime = Date.now() - (hoursBack * 60 * 60 * 1000);
+    const recentEntries = this.context.entries.filter(e => e.timestamp >= cutoffTime);
+
+    if (recentEntries.length === 0) {
+      return {
+        success: true,
+        summary: `No activities found in the last ${hoursBack} hour(s)`,
+        changed: false,
+        entriesAnalyzed: 0,
+      };
+    }
+
+    const result = await this.profileManager.updateProfile(recentEntries, onEvent);
+    
+    return {
+      ...result,
+      entriesAnalyzed: recentEntries.length,
+    };
+  }
+
+  /**
+   * Update the user profile based on entries from a specific date range
+   */
+  async updateProfileForDateRange(
+    startDate: string,
+    endDate: string,
+    onEvent?: (event: { type: string; content?: string }) => void
+  ): Promise<{ success: boolean; summary: string; changed: boolean; entriesAnalyzed: number }> {
+    const entries = this.getEntriesByDateRange(startDate, endDate);
+
+    if (entries.length === 0) {
+      return {
+        success: true,
+        summary: `No activities found between ${startDate} and ${endDate}`,
+        changed: false,
+        entriesAnalyzed: 0,
+      };
+    }
+
+    const result = await this.profileManager.updateProfile(entries, onEvent);
+    
+    return {
+      ...result,
+      entriesAnalyzed: entries.length,
+    };
+  }
+
+  /**
+   * Restore profile to a previous version from history
+   * @param editIndex - Index of edit to restore to (0 = most recent)
+   */
+  restoreProfileFromHistory(editIndex: number): { success: boolean; message: string } {
+    return this.profileManager.restoreFromHistory(editIndex);
+  }
+
+  /**
+   * Get timestamp of last profile update
+   */
+  getLastProfileUpdateTimestamp(): string | undefined {
+    return this.profileManager.getLastUpdateTimestamp();
+  }
+
+  /**
+   * Rebuild profile from scratch using all indexed entries.
+   * Resets the profile to default first, then updates with all data.
+   */
+  async rebuildProfile(): Promise<{ success: boolean; summary: string; changed: boolean; entriesAnalyzed: number }> {
+    // Reset to default
+    this.profileManager.resetProfile();
+
+    const entries = this.context.entries;
+    if (entries.length === 0) {
+      return { success: true, summary: "No entries to build from", changed: false, entriesAnalyzed: 0 };
+    }
+
+    const result = await this.profileManager.updateProfile(entries);
+    return { ...result, entriesAnalyzed: entries.length };
+  }
+
+  /**
+   * Check if profile update is due (based on time since last update)
+   * @param intervalHours - How often to update (default: 1 hour)
+   */
+  isProfileUpdateDue(intervalHours = 1): boolean {
+    const lastUpdate = this.profileManager.getLastUpdateTimestamp();
+    if (!lastUpdate) return true;
+    
+    const lastUpdateTime = new Date(lastUpdate).getTime();
+    const timeSinceUpdate = Date.now() - lastUpdateTime;
+    const intervalMs = intervalHours * 60 * 60 * 1000;
+    
+    return timeSinceUpdate >= intervalMs;
   }
 }

@@ -228,6 +228,62 @@ async function main() {
       break;
     }
 
+    case "profile": {
+      // Show current user profile
+      await showProfile(dataDir);
+      break;
+    }
+
+    case "profile-update": {
+      // Update user profile based on recent activity
+      // --hours <N> to specify how many hours back to look (default: 1)
+      // --range <start> <end> to use a date range instead
+      const hoursIndex = args.indexOf("--hours");
+      const rangeIndex = args.indexOf("--range");
+      
+      if (rangeIndex !== -1) {
+        const startDate = args[rangeIndex + 1];
+        const endDate = args[rangeIndex + 2];
+        if (!startDate || !endDate) {
+          console.error("Usage: activity-agent profile-update --range <start-date> <end-date>");
+          console.error("Example: activity-agent profile-update --range 2026-01-01 2026-01-31");
+          process.exit(1);
+        }
+        await updateProfileForRange(dataDir, startDate, endDate);
+      } else {
+        const hours = hoursIndex !== -1 && args[hoursIndex + 1] 
+          ? parseInt(args[hoursIndex + 1]) 
+          : 1;
+        await updateProfile(dataDir, hours);
+      }
+      break;
+    }
+
+    case "profile-history": {
+      // Show profile update history
+      const count = args[0] ? parseInt(args[0]) : 10;
+      await showProfileHistory(dataDir, count);
+      break;
+    }
+
+    case "profile-rebuild": {
+      // Wipe profile and rebuild from all indexed entries
+      await rebuildProfile(dataDir);
+      break;
+    }
+
+    case "profile-restore": {
+      // Restore profile to a previous version
+      const index = args[0] ? parseInt(args[0]) : undefined;
+      if (index === undefined) {
+        console.error("Usage: activity-agent profile-restore <index>");
+        console.error("Use 'profile-history' to see available versions (0 = most recent change)");
+        process.exit(1);
+      }
+      await restoreProfile(dataDir, index);
+      break;
+    }
+
     case "help":
     default: {
       showHelp();
@@ -261,6 +317,16 @@ Commands:
   undo                Undo the last rule change
   sync                Sync JSON context to SQLite search index
   rebuild             Rebuild SQLite search index from scratch
+
+User Profile:
+  profile             Show current user profile (interests, technologies, etc.)
+  profile-update      Update profile based on recent activity
+                      --hours <N>       Analyze last N hours (default: 1)
+                      --range <s> <e>   Analyze date range instead
+  profile-rebuild     Wipe and rebuild profile from all entries
+  profile-history [N] Show last N profile updates (default: 10)
+  profile-restore <i> Restore profile to version i (0 = most recent change)
+
   help                Show this help
 
 Examples:
@@ -269,6 +335,8 @@ Examples:
   activity-agent chat "show me the rules"
   activity-agent --data ~/screenshots status
   activity-agent search "what was I doing yesterday" --debug
+  activity-agent profile-update --hours 24
+  activity-agent profile-update --range 2026-01-01 2026-01-31
 
 Environment:
   ANTHROPIC_API_KEY   Required for the AI model
@@ -735,6 +803,114 @@ async function chatMessage(dataDir: string, message: string, historyJson?: strin
   });
   
   console.log("\n" + response);
+}
+
+// ============================================================
+// User Profile Commands
+// ============================================================
+
+async function showProfile(dataDir: string) {
+  const agent = await ActivityAgent.create({ dataDir });
+  const profile = agent.getProfile();
+  
+  console.log(profile);
+  
+  // Show last update info
+  const lastUpdate = agent.getLastProfileUpdateTimestamp();
+  if (lastUpdate) {
+    const lastUpdateDate = new Date(lastUpdate);
+    const timeSince = Date.now() - lastUpdateDate.getTime();
+    const hoursSince = Math.round(timeSince / (1000 * 60 * 60));
+    console.log(`\n---`);
+    console.log(`Last updated: ${lastUpdateDate.toLocaleString()} (${hoursSince} hours ago)`);
+    
+    if (agent.isProfileUpdateDue(1)) {
+      console.log(`💡 Profile update is due. Run: activity-agent profile-update`);
+    }
+  }
+}
+
+async function updateProfile(dataDir: string, hoursBack: number) {
+  const agent = await ActivityAgent.create({ dataDir });
+  
+  console.log(`Updating profile based on last ${hoursBack} hour(s) of activity...`);
+  
+  const result = await agent.updateProfile(hoursBack);
+  
+  if (result.success) {
+    if (result.changed) {
+      console.log(`✓ Profile updated! (analyzed ${result.entriesAnalyzed} activities)`);
+      console.log(`  Summary: ${result.summary}`);
+      console.log(`\nView with: activity-agent profile`);
+    } else {
+      console.log(`ℹ No changes made. ${result.summary}`);
+      console.log(`  (analyzed ${result.entriesAnalyzed} activities)`);
+    }
+  } else {
+    console.error(`✗ Failed to update profile: ${result.summary}`);
+  }
+}
+
+async function updateProfileForRange(dataDir: string, startDate: string, endDate: string) {
+  const agent = await ActivityAgent.create({ dataDir });
+  
+  console.log(`Updating profile based on activities from ${startDate} to ${endDate}...`);
+  
+  const result = await agent.updateProfileForDateRange(startDate, endDate);
+  
+  if (result.success) {
+    if (result.changed) {
+      console.log(`✓ Profile updated! (analyzed ${result.entriesAnalyzed} activities)`);
+      console.log(`  Summary: ${result.summary}`);
+      console.log(`\nView with: activity-agent profile`);
+    } else {
+      console.log(`ℹ No changes made. ${result.summary}`);
+      console.log(`  (analyzed ${result.entriesAnalyzed} activities)`);
+    }
+  } else {
+    console.error(`✗ Failed to update profile: ${result.summary}`);
+  }
+}
+
+async function rebuildProfile(dataDir: string) {
+  const agent = await ActivityAgent.create({ dataDir });
+  
+  const context = agent.getContext();
+  const totalEntries = context.entries.length;
+  
+  if (totalEntries === 0) {
+    console.log("No entries to build profile from.");
+    return;
+  }
+
+  console.log(`Rebuilding profile from scratch (${totalEntries} entries)...`);
+  
+  const result = await agent.rebuildProfile();
+  
+  if (result.success) {
+    console.log(`✓ Profile rebuilt from ${result.entriesAnalyzed} entries.`);
+    console.log(`  ${result.summary}`);
+    console.log(`\nView with: activity-agent profile`);
+  } else {
+    console.error(`✗ ${result.summary}`);
+  }
+}
+
+async function showProfileHistory(dataDir: string, count: number) {
+  const agent = await ActivityAgent.create({ dataDir });
+  console.log(agent.formatProfileHistory(count));
+}
+
+async function restoreProfile(dataDir: string, index: number) {
+  const agent = await ActivityAgent.create({ dataDir });
+  const result = agent.restoreProfileFromHistory(index);
+  
+  if (result.success) {
+    console.log(`✓ ${result.message}`);
+    console.log(`\nView restored profile with: activity-agent profile`);
+  } else {
+    console.error(`✗ ${result.message}`);
+  }
 }
 
 main().catch((error) => {

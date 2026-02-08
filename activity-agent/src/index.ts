@@ -32,3 +32,10 @@ export { SearchIndex } from "./search-index.js";
 
 // Search tools
 export { createSearchTools } from "./search-tools.js";
+
+// User profile
+export {
+  UserProfileManager,
+  type ProfileEdit,
+  type ProfileHistory,
+} from "./user-profile.js";

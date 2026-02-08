@@ -106,6 +106,49 @@ activity-agent undo
 
 See [docs/learned-rules.md](docs/learned-rules.md) for details.
 
+### User Profile
+
+The agent maintains a user profile (`user-profile.md`) that automatically tracks your interests, technologies, work patterns, and projects based on your activity.
+
+**Automatic Updates**: The profile is automatically updated every 100 screenshots processed. No cron job needed!
+
+```bash
+# View current profile
+activity-agent profile
+
+# Manual update (based on last hour of activity)
+activity-agent profile-update
+
+# Update based on last 24 hours
+activity-agent profile-update --hours 24
+
+# Update based on a date range (e.g., last month)
+activity-agent profile-update --range 2026-01-01 2026-01-31
+
+# View profile update history
+activity-agent profile-history
+
+# Restore to a previous version (0 = most recent change)
+activity-agent profile-restore 0
+```
+
+The profile includes sections for:
+- **Interests** - Topics and subjects you engage with
+- **Technologies & Tools** - Languages, frameworks, apps you use frequently
+- **Work Patterns** - When and how you work
+- **Frequently Visited** - Websites and resources you return to
+- **Projects** - Current and past projects
+
+Profile updates are stored in `profile-history.json` so you can always restore to a previous version.
+
+To change the auto-update interval (or disable it), use the `profileUpdateInterval` option when creating the agent programmatically:
+```typescript
+const agent = await ActivityAgent.create({
+  dataDir: "~/Library/Application Support/Monitome",
+  profileUpdateInterval: 50,  // Update every 50 screenshots (default: 100, 0 to disable)
+});
+```
+
 ## Programmatic Usage
 
 ### From Swift (via CLI)
