@@ -78,6 +78,14 @@ cp "$PI_PKG_DIR/dist/modes/interactive/theme"/*.json "$PI_BUILD_DIR/theme/"
 # 2. Build the Swift app (Release, Universal binary)
 echo "Building Swift app (universal binary)..."
 cd "$PROJECT_DIR"
+
+# Temporarily hide the activity-agent binary so Xcode's copy script phase
+# is a no-op — we handle copying + signing ourselves below.
+AGENT_BINARY="$PROJECT_DIR/activity-agent/dist/activity-agent"
+if [ -f "$AGENT_BINARY" ]; then
+    mv "$AGENT_BINARY" "$AGENT_BINARY.tmp"
+fi
+
 xcodebuild -project Monitome.xcodeproj \
     -scheme Monitome \
     -configuration Release \
@@ -89,6 +97,11 @@ xcodebuild -project Monitome.xcodeproj \
     DEVELOPMENT_TEAM="$TEAM_ID" \
     CODE_SIGN_STYLE=Manual \
     2>&1 | grep -E "(error:|warning:|BUILD|Signing)" || true
+
+# Restore the activity-agent binary
+if [ -f "$AGENT_BINARY.tmp" ]; then
+    mv "$AGENT_BINARY.tmp" "$AGENT_BINARY"
+fi
 
 # 3. Copy the app
 APP_PATH="$DIST_DIR/build/Build/Products/Release/$APP_NAME.app"
@@ -127,29 +140,31 @@ ln -s ../Resources/package.json "$APP_BUNDLE/Contents/MacOS/package.json"
 mkdir -p "$APP_BUNDLE/Contents/Resources/extensions/monitome-search"
 cp "$PROJECT_DIR/activity-agent/dist/extension-bundle.js" "$APP_BUNDLE/Contents/Resources/extensions/monitome-search/index.js"
 
-# 5. Sign the main app binary with hardened runtime
-echo "Signing main app binary..."
-codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" \
-    "$APP_BUNDLE/Contents/MacOS/Monitome"
+# Sign inside-out: inner components first, then main binary, then bundle
 
-# 6. Sign all frameworks/dylibs with hardened runtime
+# 5. Sign all frameworks/dylibs with hardened runtime
 echo "Signing frameworks..."
 find "$APP_BUNDLE/Contents/Frameworks" -type f \( -name "*.dylib" -o -perm +111 \) -exec \
     codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" {} \; 2>/dev/null || true
 
-# 7. Sign activity-agent WITH hardened runtime AND JIT entitlements
+# 6. Sign activity-agent WITH hardened runtime AND JIT entitlements
 echo "Signing activity-agent binary (with JIT entitlements)..."
 codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" \
     --entitlements "$PROJECT_DIR/activity-agent/entitlements.plist" \
     "$APP_BUNDLE/Contents/MacOS/activity-agent"
 
-# 7b. Sign Pi binary WITH hardened runtime AND JIT entitlements
+# 6b. Sign Pi binary WITH hardened runtime AND JIT entitlements
 echo "Signing Pi binary (with JIT entitlements)..."
 codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" \
     --entitlements "$PROJECT_DIR/activity-agent/entitlements.plist" \
     "$APP_BUNDLE/Contents/MacOS/pi"
 
-# 8. Sign the app bundle (not deep, preserve individual signatures)
+# 7. Sign the main app binary
+echo "Signing main app binary..."
+codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" \
+    "$APP_BUNDLE/Contents/MacOS/Monitome"
+
+# 8. Sign the app bundle (top-level, preserves individual signatures)
 echo "Signing app bundle..."
 codesign --force --options runtime --timestamp --sign "$SIGN_IDENTITY" \
     "$APP_BUNDLE"
