@@ -426,6 +426,11 @@ final class ActivityAgentManager: ObservableObject {
             env["ANTHROPIC_API_KEY"] = apiKey
         }
         
+        // Disable JIT for Bun compiled binary — prevents "Ran out of executable memory"
+        // error when processing base64 images. The agent is I/O bound (API calls)
+        // so interpreter mode has negligible performance impact.
+        env["BUN_JSC_useJIT"] = "0"
+        
         return env
     }
     

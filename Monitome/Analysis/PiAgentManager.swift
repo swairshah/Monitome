@@ -156,7 +156,7 @@ final class PiAgentManager: ObservableObject {
             }.joined(separator: " ")
             
             let shellCommand = """
-            export PATH="/opt/homebrew/bin:$HOME/.nvm/versions/node/v22.16.0/bin:$PATH"
+            export PATH="$HOME/.nvm/versions/node/v22.16.0/bin:/opt/homebrew/bin:$PATH"
             "\(piPath)" \(escapedArgs)
             """
             process.arguments = ["-c", shellCommand]

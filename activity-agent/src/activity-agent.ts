@@ -80,7 +80,23 @@ FOCUS ON SEARCHABILITY:
 - Activity = what you'd type to find this ("reading Java CLI blog post", "debugging auth in pi-mono")
 - Summary = key facts that make this findable (author names, specific topics, error messages)
 - Skip generic info (window chrome, UI elements) - focus on CONTENT
-- Only include relevant metadata objects`;
+- Only include relevant metadata objects
+
+CRITICAL - SEPARATE OVERLAPPING UI LAYERS:
+Screenshots often show multiple overlapping elements. You MUST distinguish between them:
+- **Main content** = the primary window/app the user is focused on (usually the largest, behind everything)
+- **Overlays** = notifications, FaceTime/call popups, PiP video, Spotlight, system alerts, etc.
+
+The "app" and main metadata (browser, ide, etc.) should describe the PRIMARY content only.
+Overlays should be noted in "summary" or "tags" but NEVER mixed into the main metadata.
+
+Example: If the screenshot shows a blog post in Chrome with a FaceTime notification overlay:
+- app.name = "Chrome" (the main content)
+- browser.pageTitle = the article title (NOT the caller's name)
+- summary = mention both: "Reading article about X on domain.com. FaceTime call from Person visible as overlay."
+- tags = include both the article topic AND the person's name (both are searchable)
+
+DO NOT conflate overlay content with main content. A notification showing "John Smith calling" does NOT mean John Smith wrote the article behind it.`;
 
 /**
  * Analysis result from the LLM
