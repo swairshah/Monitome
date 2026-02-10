@@ -5,6 +5,7 @@ import { getModel, type Model } from "@mariozechner/pi-ai";
 import type {
   ActivityContext,
   ActivityEntry,
+  Activity,
   ScreenshotInfo,
   AppMetadata,
   BrowserMetadata,
@@ -43,65 +44,72 @@ Ask yourself: "If I wanted to find this screenshot in 6 months, what would I sea
 - Key concepts, technologies, tools
 - What was being read/watched/coded
 
-Extract structured metadata:
+MULTI-ACTIVITY EXTRACTION:
+Screenshots often show multiple overlapping UI layers — a browser with a FaceTime call overlay, a Slack notification over VS Code, etc. You MUST return a SEPARATE activity for each visible layer.
+
+- "primary" = the main focused window/app (usually the largest, behind everything)
+- "overlay" = notifications, FaceTime/call popups, PiP video, Spotlight, system alerts, etc.
+
+Each activity gets its OWN app, metadata, description, and tags. NEVER mix overlay content into the primary activity.
+
+Extract structured metadata per activity:
 
 1. **App** (required): name, window title, category (browser/ide/terminal/media/communication/productivity/design/system/other)
-
 2. **Browser** (if applicable): url, domain, page title, page type (video/article/social/search/documentation/code/email/chat/shopping/other)
-
 3. **Video** (if watching): platform, title, channel, duration
-
 4. **IDE** (if coding): ide name, current file, project name, language, git branch
-
 5. **Terminal** (if applicable): cwd, last command
-
 6. **Communication** (if chatting): app, channel/recipient
-
 7. **Document** (if applicable): app, document title
 
 Respond with JSON (no markdown):
 {
-  "app": { "name": "App", "windowTitle": "Title", "category": "browser|ide|terminal|media|communication|productivity|other" },
-  "browser": { "url": "full url", "domain": "domain.com", "pageTitle": "Title", "pageType": "video|article|documentation|code|other" },
-  "video": { "platform": "YouTube", "title": "Full Video Title", "channel": "Channel", "duration": "12:34" },
-  "ide": { "ide": "VS Code", "currentFile": "file.ts", "filePath": "/full/path", "language": "TypeScript", "projectName": "project" },
-  "terminal": { "cwd": "/path", "lastCommand": "npm run build" },
-  "communication": { "app": "Slack", "channel": "#channel", "recipient": "Person" },
-  "document": { "app": "Notion", "documentTitle": "Title" },
-  "activity": "Specific searchable description - what would you search to find this?",
-  "summary": "Key searchable content: article titles, video names, code topics, project names, technologies, concepts. 1-2 sentences max.",
-  "tags": ["searchable", "terms", "project-names", "technologies", "topics", "people"],
+  "activities": [
+    {
+      "layer": "primary",
+      "app": { "name": "Chrome", "windowTitle": "Title", "category": "browser" },
+      "browser": { "url": "full url", "domain": "domain.com", "pageTitle": "Title", "pageType": "article" },
+      "activity": "Reading blog post about TypeScript sandboxes",
+      "summary": "Key searchable content for this layer. 1-2 sentences max.",
+      "tags": ["searchable", "terms", "technologies"]
+    },
+    {
+      "layer": "overlay",
+      "app": { "name": "FaceTime", "category": "communication" },
+      "communication": { "app": "FaceTime", "type": "video-call" },
+      "activity": "Incoming FaceTime call from John Smith",
+      "summary": "FaceTime video call notification from John Smith.",
+      "tags": ["John Smith", "FaceTime"]
+    }
+  ],
   "isContinuation": true/false
 }
 
-FOCUS ON SEARCHABILITY:
-- Extract the EXACT URL, article title, video title, repo name, file path
-- Tags should be search terms: project names, technologies, concepts, people
-- Activity = what you'd type to find this ("reading Java CLI blog post", "debugging auth in pi-mono")
-- Summary = key facts that make this findable (author names, specific topics, error messages)
-- Skip generic info (window chrome, UI elements) - focus on CONTENT
-- Only include relevant metadata objects
-
-CRITICAL - SEPARATE OVERLAPPING UI LAYERS:
-Screenshots often show multiple overlapping elements. You MUST distinguish between them:
-- **Main content** = the primary window/app the user is focused on (usually the largest, behind everything)
-- **Overlays** = notifications, FaceTime/call popups, PiP video, Spotlight, system alerts, etc.
-
-The "app" and main metadata (browser, ide, etc.) should describe the PRIMARY content only.
-Overlays should be noted in "summary" or "tags" but NEVER mixed into the main metadata.
-
-Example: If the screenshot shows a blog post in Chrome with a FaceTime notification overlay:
-- app.name = "Chrome" (the main content)
-- browser.pageTitle = the article title (NOT the caller's name)
-- summary = mention both: "Reading article about X on domain.com. FaceTime call from Person visible as overlay."
-- tags = include both the article topic AND the person's name (both are searchable)
-
-DO NOT conflate overlay content with main content. A notification showing "John Smith calling" does NOT mean John Smith wrote the article behind it.`;
+RULES:
+- Always return at least one activity with layer "primary"
+- Only include "overlay" activities when there are VISIBLE overlapping UI elements (notifications, calls, PiP, etc.)
+- If there's only one app visible, return a single activity with layer "primary"
+- Each activity gets its own metadata objects — only include relevant ones per activity
+- FOCUS ON SEARCHABILITY per activity:
+  - Extract the EXACT URL, article title, video title, repo name, file path
+  - Tags should be search terms: project names, technologies, concepts, people
+  - Activity = what you'd type to find this ("reading Java CLI blog post", "debugging auth in pi-mono")
+  - Summary = key facts that make this findable (author names, specific topics, error messages)
+  - Skip generic info (window chrome, UI elements) - focus on CONTENT`;
 
 /**
- * Analysis result from the LLM
+ * Analysis result from the LLM (new multi-activity format)
  */
 interface AnalysisResult {
+  activities: Activity[];
+  isContinuation: boolean;
+}
+
+/**
+ * Raw activity from LLM response (before normalization)
+ */
+interface RawActivity {
+  layer?: "primary" | "overlay";
   app: AppMetadata;
   browser?: BrowserMetadata;
   video?: VideoMetadata;
@@ -110,7 +118,23 @@ interface AnalysisResult {
   communication?: CommunicationMetadata;
   document?: DocumentMetadata;
   activity: string;
-  details: string;
+  summary: string;
+  tags: string[];
+}
+
+/**
+ * Legacy flat format from old LLM responses (for backward compat parsing)
+ */
+interface LegacyAnalysisResult {
+  app: AppMetadata;
+  browser?: BrowserMetadata;
+  video?: VideoMetadata;
+  ide?: IdeMetadata;
+  terminal?: TerminalMetadata;
+  communication?: CommunicationMetadata;
+  document?: DocumentMetadata;
+  activity: string;
+  details?: string;
   summary: string;
   tags: string[];
   isContinuation: boolean;
@@ -313,7 +337,7 @@ Extract all structured information from this screenshot.`;
       throw new Error("No text content in response");
     }
 
-    let analysis: AnalysisResult;
+    let parsed: any;
 
     try {
       // Remove potential markdown code block wrapper
@@ -327,7 +351,7 @@ Extract all structured information from this screenshot.`;
       if (jsonText.endsWith("```")) {
         jsonText = jsonText.slice(0, -3);
       }
-      analysis = JSON.parse(jsonText.trim());
+      parsed = JSON.parse(jsonText.trim());
     } catch (e) {
       console.error("Failed to parse JSON response:", textContent.text);
       throw new Error(`Failed to parse analysis: ${e}`);
@@ -345,26 +369,72 @@ Extract all structured information from this screenshot.`;
       return Object.keys(cleaned).length > 0 ? (cleaned as T) : undefined;
     };
 
+    // Normalize to AnalysisResult — handle both new multi-activity and old flat format
+    let analysis: AnalysisResult;
+
+    if (parsed.activities && Array.isArray(parsed.activities)) {
+      // New multi-activity format
+      const activities: Activity[] = parsed.activities.map((raw: RawActivity) => ({
+        layer: raw.layer || "primary",
+        app: raw.app,
+        browser: cleanNulls<BrowserMetadata>(raw.browser),
+        video: cleanNulls<VideoMetadata>(raw.video),
+        ide: cleanNulls<IdeMetadata>(raw.ide),
+        terminal: cleanNulls<TerminalMetadata>(raw.terminal),
+        communication: cleanNulls<CommunicationMetadata>(raw.communication),
+        document: cleanNulls<DocumentMetadata>(raw.document),
+        activity: raw.activity,
+        summary: raw.summary,
+        tags: raw.tags || [],
+      }));
+      analysis = { activities, isContinuation: parsed.isContinuation ?? false };
+    } else {
+      // Legacy flat format — wrap into single-element activities array
+      const legacy = parsed as LegacyAnalysisResult;
+      analysis = {
+        activities: [{
+          layer: "primary" as const,
+          app: legacy.app,
+          browser: cleanNulls<BrowserMetadata>(legacy.browser),
+          video: cleanNulls<VideoMetadata>(legacy.video),
+          ide: cleanNulls<IdeMetadata>(legacy.ide),
+          terminal: cleanNulls<TerminalMetadata>(legacy.terminal),
+          communication: cleanNulls<CommunicationMetadata>(legacy.communication),
+          document: cleanNulls<DocumentMetadata>(legacy.document),
+          activity: legacy.activity,
+          summary: legacy.summary || legacy.details || "",
+          tags: legacy.tags || [],
+        }],
+        isContinuation: legacy.isContinuation ?? false,
+      };
+    }
+
+    // Find primary activity for backward-compat flat fields
+    const primary = analysis.activities.find(a => a.layer === "primary") || analysis.activities[0];
+
     const entry: ActivityEntry = {
       filename: screenshot.filename,
       timestamp: screenshot.timestamp,
       date: screenshot.date,
       time: screenshot.time,
-      app: analysis.app,
-      browser: cleanNulls<BrowserMetadata>(analysis.browser),
-      video: cleanNulls<VideoMetadata>(analysis.video),
-      ide: cleanNulls<IdeMetadata>(analysis.ide),
-      terminal: cleanNulls<TerminalMetadata>(analysis.terminal),
-      communication: cleanNulls<CommunicationMetadata>(analysis.communication),
-      document: cleanNulls<DocumentMetadata>(analysis.document),
-      activity: analysis.activity,
-      details: analysis.details,
-      summary: analysis.summary,
-      tags: analysis.tags,
+      // Flat fields from primary activity (backward compat)
+      app: primary.app,
+      browser: primary.browser,
+      video: primary.video,
+      ide: primary.ide,
+      terminal: primary.terminal,
+      communication: primary.communication,
+      document: primary.document,
+      // Multi-activity array
+      activities: analysis.activities,
+      activity: primary.activity,
+      details: primary.summary,
+      summary: primary.summary,
+      tags: primary.tags,
       isContinuation: analysis.isContinuation,
       // Legacy fields
-      application: analysis.app.name,
-      url: analysis.browser?.url,
+      application: primary.app.name,
+      url: primary.browser?.url,
     };
 
     return entry;
@@ -449,6 +519,117 @@ Extract all structured information from this screenshot.`;
    */
   getPhashStats(): { totalHashes: number; indexSizeBytes: number } {
     return this.phashManager.getStats();
+  }
+
+  /**
+   * Re-analyze existing entries with current rules.
+   * This re-runs the LLM analysis on the original screenshot files and updates
+   * both the JSON context and SQLite search index.
+   *
+   * @param filter - Which entries to reanalyze:
+   *   - { type: "all" } - reanalyze everything
+   *   - { type: "date", date: "YYYY-MM-DD" } - reanalyze a specific date
+   *   - { type: "dateRange", startDate, endDate } - reanalyze a date range
+   *   - { type: "filenames", filenames: string[] } - reanalyze specific files
+   * @param onProgress - Optional progress callback
+   * @returns Summary of what was reanalyzed
+   */
+  async reanalyzeEntries(
+    filter: 
+      | { type: "all" }
+      | { type: "date"; date: string }
+      | { type: "dateRange"; startDate: string; endDate: string }
+      | { type: "filenames"; filenames: string[] },
+    onProgress?: (event: { current: number; total: number; filename: string; status: "start" | "done" | "error" | "skipped"; error?: string }) => void
+  ): Promise<{ reanalyzed: number; failed: number; skipped: number; total: number }> {
+    // Determine which entries to reanalyze
+    let entriesToReanalyze: ActivityEntry[];
+    
+    switch (filter.type) {
+      case "all":
+        entriesToReanalyze = [...this.context.entries];
+        break;
+      case "date":
+        entriesToReanalyze = this.context.entries.filter(e => e.date === filter.date);
+        break;
+      case "dateRange":
+        entriesToReanalyze = this.context.entries.filter(
+          e => e.date >= filter.startDate && e.date <= filter.endDate
+        );
+        break;
+      case "filenames":
+        const filenameSet = new Set(filter.filenames);
+        entriesToReanalyze = this.context.entries.filter(e => filenameSet.has(e.filename));
+        break;
+    }
+
+    const total = entriesToReanalyze.length;
+    let reanalyzed = 0;
+    let failed = 0;
+    let skipped = 0;
+
+    const recordingsDir = join(this.dataDir, "recordings");
+
+    for (let i = 0; i < entriesToReanalyze.length; i++) {
+      const oldEntry = entriesToReanalyze[i];
+      const screenshotPath = join(recordingsDir, oldEntry.filename);
+
+      // Check if screenshot file still exists
+      if (!existsSync(screenshotPath)) {
+        onProgress?.({ current: i + 1, total, filename: oldEntry.filename, status: "skipped" });
+        skipped++;
+        continue;
+      }
+
+      onProgress?.({ current: i + 1, total, filename: oldEntry.filename, status: "start" });
+
+      try {
+        // Build ScreenshotInfo from existing entry
+        const screenshot: ScreenshotInfo = {
+          filename: oldEntry.filename,
+          timestamp: oldEntry.timestamp,
+          date: oldEntry.date,
+          time: oldEntry.time,
+          path: screenshotPath,
+        };
+
+        // Re-analyze with current rules
+        const newEntry = await this.analyzeScreenshot(screenshot);
+
+        // Replace in context
+        const contextIndex = this.context.entries.findIndex(e => e.filename === oldEntry.filename);
+        if (contextIndex !== -1) {
+          this.context.entries[contextIndex] = newEntry;
+        }
+
+        // Update in search index
+        if (this.searchIndex) {
+          this.searchIndex.deleteEntry(oldEntry.filename);
+          this.searchIndex.indexEntry(newEntry);
+        }
+
+        reanalyzed++;
+        onProgress?.({ current: i + 1, total, filename: oldEntry.filename, status: "done" });
+      } catch (error) {
+        failed++;
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        onProgress?.({ current: i + 1, total, filename: oldEntry.filename, status: "error", error: errorMsg });
+      }
+    }
+
+    // Save updated context
+    this.saveContext();
+
+    return { reanalyzed, failed, skipped, total };
+  }
+
+  /**
+   * Get the screenshot file path for a given entry filename
+   */
+  getScreenshotPath(filename: string): string | null {
+    const recordingsDir = join(this.dataDir, "recordings");
+    const fullPath = join(recordingsDir, filename);
+    return existsSync(fullPath) ? fullPath : null;
   }
 
   /**
@@ -1124,40 +1305,155 @@ Return JSON (no markdown):
       }
     };
 
-    const allTools: AgentTool[] = [...searchTools, feedbackTool, showRulesTool, undoTool, statusTool];
+    // Reanalyze tool - re-run LLM analysis with current rules
+    const reanalyzeTool: AgentTool = {
+      name: "reanalyze_entries",
+      label: "Reanalyze Entries",
+      description: `Re-analyze existing screenshots with current indexing rules. Use this when:
+- The user has updated indexing rules and wants to apply them to existing entries
+- The user asks to "reindex" or "reanalyze" specific screenshots, dates, or all entries
+- The user says something like "reindex yesterday's screenshots with the new rules"
+
+This re-runs the LLM analysis on the original screenshot files. It can be slow for many entries.
+Prefer targeted reanalysis (specific date or filenames) over "all" when possible.`,
+      parameters: Type.Object({
+        filterType: Type.Union([
+          Type.Literal("all"),
+          Type.Literal("date"),
+          Type.Literal("dateRange"),
+          Type.Literal("filenames"),
+        ], { description: "How to select entries: 'all', 'date' (single day), 'dateRange', or 'filenames'" }),
+        date: Type.Optional(Type.String({ description: "Date for 'date' filter (YYYY-MM-DD)" })),
+        startDate: Type.Optional(Type.String({ description: "Start date for 'dateRange' filter (YYYY-MM-DD)" })),
+        endDate: Type.Optional(Type.String({ description: "End date for 'dateRange' filter (YYYY-MM-DD)" })),
+        filenames: Type.Optional(Type.Array(Type.String(), { description: "Specific screenshot filenames to reanalyze" })),
+      }),
+      execute: async (_toolCallId, rawParams) => {
+        const params = rawParams as {
+          filterType: "all" | "date" | "dateRange" | "filenames";
+          date?: string;
+          startDate?: string;
+          endDate?: string;
+          filenames?: string[];
+        };
+
+        let filter: Parameters<typeof this.reanalyzeEntries>[0];
+        
+        switch (params.filterType) {
+          case "all":
+            filter = { type: "all" };
+            break;
+          case "date":
+            if (!params.date) {
+              return { content: [{ type: "text" as const, text: "Error: 'date' parameter required for date filter" }], details: {} };
+            }
+            filter = { type: "date", date: params.date };
+            break;
+          case "dateRange":
+            if (!params.startDate || !params.endDate) {
+              return { content: [{ type: "text" as const, text: "Error: 'startDate' and 'endDate' required for dateRange filter" }], details: {} };
+            }
+            filter = { type: "dateRange", startDate: params.startDate, endDate: params.endDate };
+            break;
+          case "filenames":
+            if (!params.filenames || params.filenames.length === 0) {
+              return { content: [{ type: "text" as const, text: "Error: 'filenames' array required for filenames filter" }], details: {} };
+            }
+            filter = { type: "filenames", filenames: params.filenames };
+            break;
+        }
+
+        const result = await this.reanalyzeEntries(filter);
+        
+        let text = `Reanalysis complete:\n`;
+        text += `- Total entries selected: ${result.total}\n`;
+        text += `- Successfully reanalyzed: ${result.reanalyzed}\n`;
+        if (result.skipped > 0) text += `- Skipped (file missing): ${result.skipped}\n`;
+        if (result.failed > 0) text += `- Failed: ${result.failed}\n`;
+        
+        return {
+          content: [{ type: "text" as const, text }],
+          details: result,
+        };
+      }
+    };
+
+    // Get screenshot file path tool
+    const getScreenshotPathTool: AgentTool = {
+      name: "get_screenshot_path",
+      label: "Get Screenshot Path",
+      description: "Get the full file path for a screenshot by its filename. Use this when the user asks to see or open a specific screenshot.",
+      parameters: Type.Object({
+        filename: Type.String({ description: "Screenshot filename (e.g., '20260208_161910210.jpg')" }),
+      }),
+      execute: async (_toolCallId, rawParams) => {
+        const params = rawParams as { filename: string };
+        const path = this.getScreenshotPath(params.filename);
+        if (path) {
+          return {
+            content: [{ type: "text" as const, text: `Screenshot path: ${path}` }],
+            details: { path, exists: true },
+          };
+        } else {
+          return {
+            content: [{ type: "text" as const, text: `Screenshot file not found: ${params.filename}` }],
+            details: { exists: false },
+          };
+        }
+      }
+    };
+
+    const allTools: AgentTool[] = [...searchTools, feedbackTool, showRulesTool, undoTool, statusTool, reanalyzeTool, getScreenshotPathTool];
+
+    // Load SOUL.md — check data dir first (user override), then bundled default
+    let soul = "";
+    const soulPaths = [
+      join(this.dataDir, "SOUL.md"),
+      join(dirname(new URL(import.meta.url).pathname), "..", "SOUL.md"),
+    ];
+    for (const p of soulPaths) {
+      if (existsSync(p)) {
+        soul = readFileSync(p, "utf-8");
+        break;
+      }
+    }
+
+    // Load user profile for context
+    const userProfile = this.profileManager.getProfile();
 
     const chatAgent = new Agent({
       initialState: {
-        systemPrompt: `You are a helpful assistant for searching and managing a personal activity tracker. The user has indexed screenshots of their computer activity.
+        systemPrompt: `${soul}
 
-You can:
-1. SEARCH - Find past activities using various search tools
-2. TEACH - Learn new rules about how to index or search (use update_rules)
-3. MANAGE - Show current rules, undo changes, check status
+## Tools
 
-SEARCH TOOLS:
-- search_fulltext: Fast keyword search
-- search_by_date_range: Activities within a date range  
-- search_by_date: Activities for a specific date
-- search_by_app: Activities for a specific app
+SEARCH:
+- search_fulltext: Keyword search
+- search_by_date_range: Date range filter
+- search_by_date: Single date filter
+- search_by_app: App filter
 - search_combined: Combine date + keywords + app
-- list_apps: See what apps are indexed
-- list_dates: See what dates have data
+- list_apps: What apps are indexed
+- list_dates: What dates have data
 
-MANAGEMENT TOOLS:
-- update_rules: Learn new indexing/search rules from feedback
-- show_rules: Display current learned rules
+REINDEX:
+- reanalyze_entries: Re-run LLM analysis on existing screenshots with current rules
+- get_screenshot_path: Get file path for a screenshot
+
+RULES:
+- update_rules: Learn new indexing/search rules from user feedback
+- show_rules: Show current learned rules
 - undo_rule_change: Revert the last rule change
-- get_status: Show index statistics
+- get_status: Index statistics
 
-For search queries, be smart about parsing:
-- "yesterday" = ${new Date(Date.now() - 86400000).toISOString().split("T")[0]}
-- "last week" = date range for past 7 days
-- "in VS Code" = filter by app
+## Date Reference
 
-Today's date is ${new Date().toISOString().split("T")[0]}.
+Today: ${new Date().toISOString().split("T")[0]}
+Yesterday: ${new Date(Date.now() - 86400000).toISOString().split("T")[0]}
 
-Be conversational but concise. When showing search results, summarize what you found.`,
+## User Profile
+
+${userProfile}`,
         model: this.model,
         thinkingLevel: "off",
         tools: allTools,
@@ -1177,24 +1473,29 @@ Be conversational but concise. When showing search results, summarize what you f
     history: Array<{ role: "user" | "assistant"; content: string }> = [],
     onEvent?: (event: { type: string; content?: string }) => void
   ): Promise<string> {
-    // Build prompt with history context
-    let prompt = message;
-    
-    if (history.length > 0) {
-      // Format history as context in the prompt
-      const historyText = history.map(msg => {
-        const role = msg.role === "user" ? "User" : "Assistant";
-        // Truncate long messages to save tokens
-        const content = msg.content.length > 500 
-          ? msg.content.slice(0, 500) + "..." 
-          : msg.content;
-        return `${role}: ${content}`;
-      }).join("\n\n");
-      
-      prompt = `Previous conversation:\n${historyText}\n\nUser: ${message}`;
-    }
-    
     const chatAgent = this.createChatAgent();
+
+    // Add history as proper message objects
+    for (const msg of history) {
+      if (msg.role === "user") {
+        chatAgent.appendMessage({
+          role: "user",
+          content: [{ type: "text", text: msg.content }],
+          timestamp: Date.now(),
+        });
+      } else {
+        chatAgent.appendMessage({
+          role: "assistant",
+          content: [{ type: "text", text: msg.content }],
+          timestamp: Date.now(),
+          api: "anthropic",
+          provider: "anthropic",
+          model: "claude-haiku-4-5",
+          usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+          stopReason: "stop",
+        });
+      }
+    }
 
     if (onEvent) {
       chatAgent.subscribe((event) => {
@@ -1208,7 +1509,7 @@ Be conversational but concise. When showing search results, summarize what you f
       });
     }
 
-    await chatAgent.prompt(prompt);
+    await chatAgent.prompt(message);
 
     // Get the final response
     const messages = chatAgent.state.messages;

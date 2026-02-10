@@ -189,6 +189,40 @@ async function main() {
       break;
     }
 
+    case "reanalyze": {
+      // Re-analyze screenshots with current rules
+      // Usage: activity-agent reanalyze [--date YYYY-MM-DD] [--from YYYY-MM-DD --to YYYY-MM-DD] [--files f1.jpg f2.jpg] [--all]
+      const dateIndex = args.indexOf("--date");
+      const fromIndex = args.indexOf("--from");
+      const toIndex = args.indexOf("--to");
+      const filesIndex = args.indexOf("--files");
+      const isAll = args.includes("--all");
+
+      if (dateIndex !== -1 && args[dateIndex + 1]) {
+        await reanalyzeScreenshots(dataDir, { type: "date", date: args[dateIndex + 1] });
+      } else if (fromIndex !== -1 && toIndex !== -1 && args[fromIndex + 1] && args[toIndex + 1]) {
+        await reanalyzeScreenshots(dataDir, { type: "dateRange", startDate: args[fromIndex + 1], endDate: args[toIndex + 1] });
+      } else if (filesIndex !== -1) {
+        const filenames = args.slice(filesIndex + 1).filter(a => !a.startsWith("--"));
+        if (filenames.length === 0) {
+          console.error("Usage: activity-agent reanalyze --files <file1.jpg> <file2.jpg> ...");
+          process.exit(1);
+        }
+        await reanalyzeScreenshots(dataDir, { type: "filenames", filenames });
+      } else if (isAll) {
+        await reanalyzeScreenshots(dataDir, { type: "all" });
+      } else {
+        console.error("Usage: activity-agent reanalyze [--date YYYY-MM-DD] [--from YYYY-MM-DD --to YYYY-MM-DD] [--files f1.jpg ...] [--all]");
+        console.error("\nExamples:");
+        console.error("  activity-agent reanalyze --date 2026-02-08");
+        console.error("  activity-agent reanalyze --from 2026-02-01 --to 2026-02-08");
+        console.error("  activity-agent reanalyze --files 20260208_161910210.jpg 20260208_162015333.jpg");
+        console.error("  activity-agent reanalyze --all");
+        process.exit(1);
+      }
+      break;
+    }
+
     case "sync": {
       // Sync JSON context to SQLite index
       await syncIndex(dataDir);
@@ -315,6 +349,11 @@ Commands:
   rules               Show current learned rules
   history             Show history of rule changes
   undo                Undo the last rule change
+  reanalyze           Re-analyze screenshots with current rules (after rule changes)
+                      --date <YYYY-MM-DD>       Reanalyze a specific date
+                      --from <date> --to <date> Reanalyze a date range
+                      --files <f1> <f2> ...     Reanalyze specific files
+                      --all                     Reanalyze everything
   sync                Sync JSON context to SQLite search index
   rebuild             Rebuild SQLite search index from scratch
 
@@ -332,9 +371,12 @@ User Profile:
 Examples:
   activity-agent chat "what was I working on yesterday?"
   activity-agent chat "remember that for VS Code, always note the git branch"
+  activity-agent chat "reindex yesterday's screenshots with the new rules"
   activity-agent chat "show me the rules"
   activity-agent --data ~/screenshots status
   activity-agent search "what was I doing yesterday" --debug
+  activity-agent reanalyze --date 2026-02-08
+  activity-agent reanalyze --from 2026-02-01 --to 2026-02-08
   activity-agent profile-update --hours 24
   activity-agent profile-update --range 2026-01-01 2026-01-31
 
@@ -343,12 +385,76 @@ Environment:
 `);
 }
 
+/**
+ * Format a single activity layer for CLI display
+ */
+function formatActivityForCli(act: { layer: string; app?: { name: string; windowTitle?: string; bundleOrPath?: string }; browser?: any; video?: any; ide?: any; terminal?: any; communication?: any; document?: any; activity: string; summary?: string; tags?: string[] }, indent = "    ", verbose = false): string {
+  const layerLabel = act.layer === "primary" ? "PRIMARY" : "OVERLAY";
+  const appName = act.app?.name || "Unknown";
+  const lines: string[] = [];
+
+  lines.push(`  [${layerLabel}] ${appName} — ${act.activity}`);
+
+  if (act.app?.windowTitle) lines.push(`${indent}Window: ${act.app.windowTitle}`);
+
+  if (act.browser) {
+    if (act.browser.url) lines.push(`${indent}URL: ${act.browser.url}`);
+    if (act.browser.pageTitle) lines.push(`${indent}Page: ${act.browser.pageTitle}`);
+    if (act.browser.pageType && act.browser.pageType !== "other") lines.push(`${indent}Type: ${act.browser.pageType}`);
+  }
+
+  if (act.video) {
+    lines.push(`${indent}Video: "${act.video.title || "Unknown"}"`);
+    if (act.video.channel) lines.push(`${indent}Channel: ${act.video.channel}`);
+    if (act.video.duration) {
+      const position = act.video.position ? `${act.video.position} / ` : "";
+      lines.push(`${indent}Duration: ${position}${act.video.duration}`);
+    }
+  }
+
+  if (act.ide) {
+    if (act.ide.currentFile) lines.push(`${indent}File: ${act.ide.filePath || act.ide.currentFile}`);
+    if (act.ide.language) lines.push(`${indent}Language: ${act.ide.language}`);
+    if (act.ide.projectName) lines.push(`${indent}Project: ${act.ide.projectName}`);
+    if (act.ide.gitBranch) lines.push(`${indent}Branch: ${act.ide.gitBranch}`);
+  }
+
+  if (act.terminal) {
+    if (act.terminal.cwd) lines.push(`${indent}CWD: ${act.terminal.cwd}`);
+    if (act.terminal.lastCommand) lines.push(`${indent}Command: ${act.terminal.lastCommand}`);
+  }
+
+  if (act.communication) {
+    if (act.communication.channel) lines.push(`${indent}Channel: ${act.communication.channel}`);
+    if (act.communication.recipient) lines.push(`${indent}With: ${act.communication.recipient}`);
+  }
+
+  if (act.document) {
+    if (act.document.documentTitle) lines.push(`${indent}Document: ${act.document.documentTitle}`);
+  }
+
+  if (act.summary) lines.push(`${indent}Summary: ${act.summary}`);
+  if (act.tags && act.tags.length > 0) lines.push(`${indent}Tags: ${act.tags.join(", ")}`);
+
+  return lines.join("\n");
+}
+
 function formatEntry(entry: ActivityEntry, verbose = false): string {
   const lines: string[] = [];
   const appName = entry.app?.name || entry.application;
 
   lines.push(`[${entry.date} ${entry.time}] ${appName}${entry.isContinuation ? " (continuation)" : ""}`);
   lines.push(`  File: ${entry.filename}`);
+
+  // If entry has activities array, show layered format
+  if (entry.activities && entry.activities.length > 0) {
+    for (const act of entry.activities) {
+      lines.push(formatActivityForCli(act, "    ", verbose));
+    }
+    return lines.join("\n");
+  }
+
+  // Fallback for old flat entries
   lines.push(`  Activity: ${entry.activity}`);
 
   if (entry.app?.windowTitle) {
@@ -726,6 +832,63 @@ async function undoLastRuleChange(dataDir: string) {
     console.log("✓ " + result.message);
   } else {
     console.error("✗ " + result.message);
+  }
+}
+
+async function reanalyzeScreenshots(
+  dataDir: string,
+  filter: 
+    | { type: "all" }
+    | { type: "date"; date: string }
+    | { type: "dateRange"; startDate: string; endDate: string }
+    | { type: "filenames"; filenames: string[] }
+) {
+  const agent = await ActivityAgent.create({ dataDir });
+
+  let filterDesc = "";
+  switch (filter.type) {
+    case "all":
+      filterDesc = "ALL entries";
+      break;
+    case "date":
+      filterDesc = `entries for ${filter.date}`;
+      break;
+    case "dateRange":
+      filterDesc = `entries from ${filter.startDate} to ${filter.endDate}`;
+      break;
+    case "filenames":
+      filterDesc = `${filter.filenames.length} specific file(s)`;
+      break;
+  }
+
+  console.log(`Re-analyzing ${filterDesc} with current indexing rules...\n`);
+
+  const result = await agent.reanalyzeEntries(filter, (event) => {
+    switch (event.status) {
+      case "start":
+        process.stdout.write(`[${event.current}/${event.total}] Analyzing: ${event.filename}...`);
+        break;
+      case "done":
+        console.log(" ✓");
+        break;
+      case "error":
+        console.log(` ✗ ${event.error}`);
+        break;
+      case "skipped":
+        console.log(`[${event.current}/${event.total}] Skipped: ${event.filename} (file missing)`);
+        break;
+    }
+  });
+
+  console.log(`\nReanalysis complete:`);
+  console.log(`  Total selected: ${result.total}`);
+  console.log(`  Reanalyzed: ${result.reanalyzed}`);
+  if (result.skipped > 0) console.log(`  Skipped (missing files): ${result.skipped}`);
+  if (result.failed > 0) console.log(`  Failed: ${result.failed}`);
+
+  const stats = agent.getSearchIndexStats();
+  if (stats) {
+    console.log(`\nSearch index: ${stats.entries} entries, ${(stats.dbSizeBytes / 1024).toFixed(1)} KB`);
   }
 }
 

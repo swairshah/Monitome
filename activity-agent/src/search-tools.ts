@@ -4,7 +4,28 @@ import type { SearchIndex } from "./search-index.js";
 import type { ActivityEntry } from "./types.js";
 
 /**
- * Format entries for display to the agent
+ * Format a single activity layer for display
+ */
+function formatActivityLayer(act: { layer: string; app?: { name: string; windowTitle?: string }; browser?: any; video?: any; ide?: any; terminal?: any; communication?: any; document?: any; activity: string; summary?: string; tags?: string[] | string }, indent = "  "): string {
+  const layerLabel = act.layer === "primary" ? "PRIMARY" : "OVERLAY";
+  const appName = act.app?.name || "Unknown";
+  const parts = [`${indent}[${layerLabel}] ${appName} — ${act.activity}`];
+  if (act.browser?.url) parts.push(`${indent}  URL: ${act.browser.url}`);
+  if (act.browser?.pageTitle) parts.push(`${indent}  Page: ${act.browser.pageTitle}`);
+  if (act.video?.title) parts.push(`${indent}  Video: ${act.video.title}${act.video.channel ? ` by ${act.video.channel}` : ""}`);
+  if (act.ide?.filePath || act.ide?.currentFile) parts.push(`${indent}  File: ${act.ide.filePath || act.ide.currentFile}`);
+  if (act.ide?.projectName) parts.push(`${indent}  Project: ${act.ide.projectName}`);
+  if (act.terminal?.lastCommand) parts.push(`${indent}  Command: ${act.terminal.lastCommand}`);
+  if (act.communication?.recipient) parts.push(`${indent}  With: ${act.communication.recipient}`);
+  if (act.communication?.channel) parts.push(`${indent}  Channel: ${act.communication.channel}`);
+  if (act.summary) parts.push(`${indent}  Summary: ${act.summary.slice(0, 150)}`);
+  const tags = Array.isArray(act.tags) ? act.tags.join(", ") : act.tags || "";
+  if (tags) parts.push(`${indent}  Tags: ${tags}`);
+  return parts.join("\n");
+}
+
+/**
+ * Format entries for display to the agent, showing activity layers
  */
 function formatEntriesForAgent(entries: ActivityEntry[], maxEntries = 20): string {
   if (entries.length === 0) {
@@ -13,25 +34,62 @@ function formatEntriesForAgent(entries: ActivityEntry[], maxEntries = 20): strin
 
   const limited = entries.slice(0, maxEntries);
   const lines = limited.map((e, i) => {
+    const header = `[${i}] ${e.date} ${e.time}\n  Screenshot: ${e.filename}`;
+
+    // If entry has activities array, show each layer
+    if (e.activities && e.activities.length > 0) {
+      const activityLines = e.activities.map(act => formatActivityLayer(act));
+      return `${header}\n${activityLines.join("\n")}`;
+    }
+
+    // Fallback for old flat entries
     const parts = [
-      `[${i}] ${e.date} ${e.time} - ${e.app?.name || e.application}`,
-      `Screenshot: ${e.filename}`,
-      `Activity: ${e.activity}`,
+      header,
+      `  [PRIMARY] ${e.app?.name || e.application} — ${e.activity}`,
     ];
-    if (e.browser?.url) parts.push(`URL: ${e.browser.url}`);
-    if (e.browser?.pageTitle) parts.push(`Page: ${e.browser.pageTitle}`);
-    if (e.video?.title) parts.push(`Video: ${e.video.title} by ${e.video.channel}`);
-    if (e.ide?.filePath || e.ide?.currentFile) parts.push(`File: ${e.ide.filePath || e.ide.currentFile}`);
-    if (e.ide?.projectName) parts.push(`Project: ${e.ide.projectName}`);
-    if (e.terminal?.lastCommand) parts.push(`Command: ${e.terminal.lastCommand}`);
-    if (e.summary) parts.push(`Summary: ${e.summary.slice(0, 150)}...`);
-    parts.push(`Tags: ${e.tags.join(", ")}`);
-    return parts.join("\n  ");
+    if (e.browser?.url) parts.push(`    URL: ${e.browser.url}`);
+    if (e.browser?.pageTitle) parts.push(`    Page: ${e.browser.pageTitle}`);
+    if (e.video?.title) parts.push(`    Video: ${e.video.title}${e.video.channel ? ` by ${e.video.channel}` : ""}`);
+    if (e.ide?.filePath || e.ide?.currentFile) parts.push(`    File: ${e.ide.filePath || e.ide.currentFile}`);
+    if (e.ide?.projectName) parts.push(`    Project: ${e.ide.projectName}`);
+    if (e.terminal?.lastCommand) parts.push(`    Command: ${e.terminal.lastCommand}`);
+    if (e.summary) parts.push(`    Summary: ${e.summary.slice(0, 150)}`);
+    parts.push(`    Tags: ${e.tags.join(", ")}`);
+    return parts.join("\n");
   });
 
   let result = lines.join("\n\n");
   if (entries.length > maxEntries) {
     result += `\n\n... and ${entries.length - maxEntries} more entries`;
+  }
+  return result;
+}
+
+/**
+ * Format activity-level search results
+ */
+function formatActivityResults(results: { entry: ActivityEntry; layer: string; activity: string; summary: string; tags: string; app_name: string }[], maxResults = 20): string {
+  if (results.length === 0) {
+    return "No activities found.";
+  }
+
+  const limited = results.slice(0, maxResults);
+  const lines = limited.map((r, i) => {
+    const e = r.entry;
+    const layerLabel = r.layer === "primary" ? "PRIMARY" : "OVERLAY";
+    const parts = [
+      `[${i}] ${e.date} ${e.time}`,
+      `  Screenshot: ${e.filename}`,
+      `  [${layerLabel}] ${r.app_name} — ${r.activity}`,
+    ];
+    if (r.summary) parts.push(`  Summary: ${r.summary.slice(0, 150)}`);
+    if (r.tags) parts.push(`  Tags: ${r.tags}`);
+    return parts.join("\n");
+  });
+
+  let result = lines.join("\n\n");
+  if (results.length > maxResults) {
+    result += `\n\n... and ${results.length - maxResults} more activities`;
   }
   return result;
 }
@@ -44,17 +102,17 @@ export function createSearchTools(searchIndex: SearchIndex): AgentTool[] {
     name: "search_fulltext",
     label: "Full-text Search",
     description: `Fast full-text search across all indexed activities. Use this for keyword-based searches.
-Searches: activity descriptions, summaries, URLs, page titles, video titles, file paths, commands, tags.
-Returns ranked results. Use specific keywords from the user's query.`,
+Searches at the ACTIVITY level — each screenshot can have multiple activities (primary content + overlays like notifications, calls, etc.).
+Returns ranked results with layer info (PRIMARY/OVERLAY). Use specific keywords from the user's query.`,
     parameters: Type.Object({
       query: Type.String({ description: "Search keywords (e.g., 'typescript sandbox', 'github PR')" }),
       limit: Type.Optional(Type.Number({ description: "Max results to return (default 30)" })),
     }),
     execute: async (_toolCallId, rawParams) => {
       const params = rawParams as { query: string; limit?: number };
-      const results = searchIndex.searchWeighted(params.query, params.limit || 30);
+      const results = searchIndex.searchActivitiesWeighted(params.query, params.limit || 30);
       return {
-        content: [{ type: "text", text: formatEntriesForAgent(results) }],
+        content: [{ type: "text", text: formatActivityResults(results) }],
         details: { count: results.length, query: params.query },
       };
     },

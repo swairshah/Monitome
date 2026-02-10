@@ -107,6 +107,35 @@ export interface DocumentMetadata {
 }
 
 /**
+ * A single activity layer within a screenshot.
+ * Screenshots can contain multiple overlapping UI layers (e.g., a browser with a FaceTime overlay).
+ */
+export interface Activity {
+  /** Whether this is the primary focused content or an overlay (notification, PiP, call popup, etc.) */
+  layer: "primary" | "overlay";
+  /** Application metadata for this activity */
+  app: AppMetadata;
+  /** Browser-specific data */
+  browser?: BrowserMetadata;
+  /** Video-specific data */
+  video?: VideoMetadata;
+  /** IDE-specific data */
+  ide?: IdeMetadata;
+  /** Terminal-specific data */
+  terminal?: TerminalMetadata;
+  /** Communication app data */
+  communication?: CommunicationMetadata;
+  /** Document/productivity data */
+  document?: DocumentMetadata;
+  /** Brief description of what's happening in this layer */
+  activity: string;
+  /** Detailed summary of this layer's content */
+  summary: string;
+  /** Tags for searchability */
+  tags: string[];
+}
+
+/**
  * Activity analysis entry for a single screenshot
  */
 export interface ActivityEntry {
@@ -134,6 +163,9 @@ export interface ActivityEntry {
   communication?: CommunicationMetadata;
   /** Document/productivity data */
   document?: DocumentMetadata;
+
+  /** Multi-activity layers (new format). Each activity represents a separate UI layer. */
+  activities?: Activity[];
 
   /** Brief description of what's happening */
   activity: string;
