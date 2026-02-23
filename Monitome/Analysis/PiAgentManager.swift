@@ -132,6 +132,10 @@ final class PiAgentManager: ObservableObject {
         // Set data directory for extension
         env["MONITOME_DATA_DIR"] = dataDir.path
         
+        // Prevent Pi from auto-discovering packages in the working directory
+        // (crashes if it finds an empty pi-packages folder with no package.json)
+        env["PI_PACKAGE_DIR"] = "/tmp/monitome-pi-no-packages"
+        
         return env
     }
     
