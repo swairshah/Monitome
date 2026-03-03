@@ -3,125 +3,138 @@
 ## Quick Release
 
 ```bash
-# 1. Build the release DMG
-./scripts/build-release.sh 0.1.0
+# 1. Bump version
+#    - Monitome.xcodeproj → MARKETING_VERSION
+#    - activity-agent/package.json → version
+#    Commit: git commit -am "chore: bump version to X.Y.Z"
 
-# 2. Create GitHub release and upload DMG
-gh release create v0.1.0 dist/Monitome-0.1.0.dmg --title "v0.1.0" --notes "Initial release"
+# 2. Build, sign, notarize, and create DMG
+APPLE_ID=swairshah@gmail.com \
+APP_PASSWORD="$(grep APPLE_APP_PASSWORD ~/.env | cut -d= -f2)" \
+./scripts/build-release.sh X.Y.Z
 
-# 3. Update Homebrew tap with the SHA256 from build output
-```
+# 3. Tag and push
+git tag -a vX.Y.Z -m "Release vX.Y.Z"
+git push origin main
+git push origin vX.Y.Z
 
-## Manual Steps
+# 4. Create GitHub release
+gh release create vX.Y.Z dist/Monitome-X.Y.Z.dmg \
+    --title "vX.Y.Z" \
+    --generate-notes
 
-### 1. Build Release
-
-```bash
-./scripts/build-release.sh 0.1.0
-```
-
-This will:
-- Build the activity-agent (Bun compiled binary)
-- Build the Swift app (Release configuration)
-- Bundle activity-agent into the .app
-- Create a DMG
-- Output the SHA256
-
-### 2. Create GitHub Release
-
-1. Go to https://github.com/swairshah/Monitome/releases/new
-2. Tag: `v0.1.0`
-3. Title: `v0.1.0`
-4. Upload: `dist/Monitome-0.1.0.dmg`
-5. Publish
-
-Or use GitHub CLI:
-```bash
-gh release create v0.1.0 dist/Monitome-0.1.0.dmg --title "v0.1.0" --notes "Initial release"
-```
-
-### 3. Update Homebrew Tap
-
-Copy `homebrew/monitome.rb` to your tap repo and update the SHA256:
-
-```bash
-# Clone your tap
-cd ~/work/projects
-git clone https://github.com/swairshah/homebrew-tap.git
-cd homebrew-tap
-
-# Copy and update the formula
-cp ../Monitome/homebrew/monitome.rb Casks/monitome.rb
-
-# Edit Casks/monitome.rb and replace PLACEHOLDER_SHA256 with actual SHA256
-
-# Commit and push
+# 5. Update Homebrew tap (SHA256 is printed by build script)
+cd ~/work/projects/homebrew-tap
+# Edit Casks/monitome.rb: update version and sha256
 git add Casks/monitome.rb
-git commit -m "Add monitome cask v0.1.0"
+git commit -m "Update monitome to vX.Y.Z"
 git push
 ```
 
-### 4. Test Installation
+## Detailed Steps
+
+### 1. Bump Version
+
+Update version in two places:
+- `Monitome.xcodeproj` → Build Settings → `MARKETING_VERSION`
+- `activity-agent/package.json` → `"version"`
+
+Commit the version bump:
+```bash
+git commit -am "chore: bump version to X.Y.Z"
+```
+
+### 2. Build Release
 
 ```bash
-# Install
-brew install --cask swairshah/tap/monitome
+./scripts/build-release.sh X.Y.Z
+```
 
-# Or if tap not added yet
+This will:
+- Build the activity-agent as a universal binary (ARM64 + x86_64)
+- Build the Pi binary as a universal binary
+- Build the Swift app (Release configuration, universal)
+- Bundle activity-agent and Pi into the .app
+- Code sign everything (inside-out: frameworks → binaries → bundle)
+- Create a DMG
+- Notarize with Apple (if `APPLE_ID` and `APP_PASSWORD` are set)
+- Staple the notarization ticket
+- Print the SHA256
+
+To notarize in the same step:
+```bash
+APPLE_ID=swairshah@gmail.com \
+APP_PASSWORD="$(grep APPLE_APP_PASSWORD ~/.env | cut -d= -f2)" \
+./scripts/build-release.sh X.Y.Z
+```
+
+Or notarize separately:
+```bash
+xcrun notarytool submit dist/Monitome-X.Y.Z.dmg \
+    --apple-id "swairshah@gmail.com" \
+    --team-id "8B9YURJS4G" \
+    --password "$(grep APPLE_APP_PASSWORD ~/.env | cut -d= -f2)" \
+    --wait
+
+xcrun stapler staple dist/Monitome-X.Y.Z.dmg
+```
+
+### 3. Tag and Push
+
+```bash
+git tag -a vX.Y.Z -m "Release vX.Y.Z"
+git push origin main
+git push origin vX.Y.Z
+```
+
+### 4. Create GitHub Release
+
+```bash
+gh release create vX.Y.Z dist/Monitome-X.Y.Z.dmg \
+    --title "vX.Y.Z" \
+    --generate-notes
+```
+
+Or manually at https://github.com/swairshah/Monitome/releases/new
+
+### 5. Update Homebrew Tap
+
+```bash
+cd ~/work/projects/homebrew-tap
+
+# Edit Casks/monitome.rb with new version and SHA256 from build output
+# Then:
+git add Casks/monitome.rb
+git commit -m "Update monitome to vX.Y.Z"
+git push
+```
+
+### 6. Verify Installation
+
+```bash
+brew update
+brew upgrade --cask monitome
+
+# Or fresh install:
 brew tap swairshah/tap
 brew install --cask monitome
 ```
 
-## Code Signing & Notarization (Optional but Recommended)
+## Troubleshooting
 
-For distribution without Gatekeeper warnings:
-
-### 1. Sign the App
-
+### Notarization fails
 ```bash
-# Sign with Developer ID
-codesign --deep --force --verify --verbose \
-    --sign "Developer ID Application: Your Name (TEAM_ID)" \
-    --options runtime \
-    dist/Monitome.app
-
-# Sign the activity-agent binary specifically
-codesign --force --verify --verbose \
-    --sign "Developer ID Application: Your Name (TEAM_ID)" \
-    --options runtime \
-    dist/Monitome.app/Contents/MacOS/activity-agent
+# Check submission log
+xcrun notarytool log SUBMISSION_ID \
+    --apple-id "swairshah@gmail.com" \
+    --team-id "8B9YURJS4G" \
+    --password "$(grep APPLE_APP_PASSWORD ~/.env | cut -d= -f2)"
 ```
 
-### 2. Notarize
+### Notarization stuck
+- Check status: `xcrun notarytool history --apple-id EMAIL --team-id TEAM`
+- Apple status: https://developer.apple.com/system-status/
 
-```bash
-# Create zip for notarization
-ditto -c -k --keepParent dist/Monitome.app dist/Monitome.zip
-
-# Submit for notarization
-xcrun notarytool submit dist/Monitome.zip \
-    --apple-id "your@email.com" \
-    --team-id "TEAM_ID" \
-    --password "app-specific-password" \
-    --wait
-
-# Staple the notarization ticket
-xcrun stapler staple dist/Monitome.app
-```
-
-### 3. Then Create DMG
-
-```bash
-# Create DMG from notarized app
-hdiutil create -volname "Monitome" \
-    -srcfolder dist/Monitome.app \
-    -ov -format UDZO \
-    dist/Monitome-0.1.0.dmg
-```
-
-## Version Bumping
-
-Update version in:
-1. `Monitome.xcodeproj` (MARKETING_VERSION)
-2. `activity-agent/package.json`
-3. `homebrew/monitome.rb`
+### Build fails
+- Full xcodebuild log is saved to `dist/xcodebuild.log`
+- Check signing identity: `security find-identity -v -p codesigning`
