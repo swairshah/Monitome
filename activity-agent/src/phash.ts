@@ -1,12 +1,15 @@
-import { Jimp } from "jimp";
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
+import jpeg from "jpeg-js";
 
 /**
  * Perceptual hash storage and comparison
- * Used to detect similar/duplicate screenshots
- * 
- * Uses jimp for image processing (pure JS, works with Bun compile)
+ * Used to detect similar/duplicate screenshots.
+ *
+ * Implementation note:
+ * We intentionally avoid Jimp here. Bun-compiled binaries can fail at runtime
+ * when optional codec sidecar assets are missing. Screenshots are JPEGs, so a
+ * tiny JPEG-only aHash implementation is more reliable and much smaller.
  */
 
 export interface PhashEntry {
@@ -21,8 +24,7 @@ export interface PhashIndex {
 }
 
 const PHASH_VERSION = 1;
-const HAMMING_THRESHOLD = 5; // Hashes within this distance are considered similar (64 bits total for base-16 hash)
-const HASH_BASE = 16; // Use base-16 (hex) hash - gives 64-bit hash
+const HAMMING_THRESHOLD = 5; // Hashes within this distance are considered similar (64 bits total)
 
 /**
  * Convert hex string to binary string
@@ -41,16 +43,65 @@ function hexToBinary(hex: string): string {
  */
 function hammingDistance(hash1: string, hash2: string): number {
   if (hash1.length !== hash2.length) return Infinity;
-  
-  // Convert hex to binary and count differences
+
   const bin1 = hexToBinary(hash1);
   const bin2 = hexToBinary(hash2);
-  
+
   let distance = 0;
   for (let i = 0; i < bin1.length; i++) {
     if (bin1[i] !== bin2[i]) distance++;
   }
   return distance;
+}
+
+/**
+ * Compute 64-bit average hash (aHash) as 16-char hex.
+ */
+function computeAverageHashFromJpeg(buffer: Buffer): string {
+  const decoded = jpeg.decode(buffer, { useTArray: true, formatAsRGBA: true });
+  const { width, height, data } = decoded;
+
+  if (!width || !height || !data || data.length === 0) {
+    throw new Error("Invalid JPEG decode result");
+  }
+
+  // Convert to grayscale first for cheaper sampling
+  const gray = new Uint8Array(width * height);
+  for (let i = 0, p = 0; p < gray.length; p++, i += 4) {
+    const r = data[i]!;
+    const g = data[i + 1]!;
+    const b = data[i + 2]!;
+    gray[p] = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+  }
+
+  // Downsample to 8x8 by nearest-neighbor sampling
+  const sample = new Uint8Array(64);
+  let sum = 0;
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      const srcX = Math.min(width - 1, Math.floor((x + 0.5) * width / 8));
+      const srcY = Math.min(height - 1, Math.floor((y + 0.5) * height / 8));
+      const v = gray[srcY * width + srcX]!;
+      sample[y * 8 + x] = v;
+      sum += v;
+    }
+  }
+
+  const avg = sum / 64;
+
+  // Build 64 bits and pack into 16 hex chars
+  let bits = "";
+  for (let i = 0; i < 64; i++) {
+    bits += sample[i]! >= avg ? "1" : "0";
+  }
+
+  let hex = "";
+  for (let i = 0; i < 64; i += 4) {
+    const nibble = parseInt(bits.slice(i, i + 4), 2);
+    hex += nibble.toString(16);
+  }
+
+  return hex;
 }
 
 /**
@@ -86,13 +137,11 @@ export class PhashManager {
   }
 
   /**
-   * Compute perceptual hash for an image file using jimp
+   * Compute perceptual hash for a JPEG screenshot file
    */
   async computeHash(imagePath: string): Promise<string> {
     const buffer = readFileSync(imagePath);
-    const image = await Jimp.fromBuffer(buffer);
-    const hash = image.hash(HASH_BASE);
-    return hash;
+    return computeAverageHashFromJpeg(buffer);
   }
 
   /**
@@ -115,16 +164,16 @@ export class PhashManager {
    */
   findSimilar(hash: string, excludeFilename?: string): PhashEntry[] {
     const similar: PhashEntry[] = [];
-    
+
     for (const entry of this.index.entries) {
       if (excludeFilename && entry.filename === excludeFilename) continue;
-      
+
       const distance = hammingDistance(hash, entry.hash);
       if (distance <= HAMMING_THRESHOLD) {
         similar.push(entry);
       }
     }
-    
+
     return similar;
   }
 
@@ -133,8 +182,8 @@ export class PhashManager {
    * Returns: { isDuplicate: boolean, similarTo?: string, hash: string }
    */
   async checkAndAdd(
-    imagePath: string, 
-    filename: string, 
+    imagePath: string,
+    filename: string,
     timestamp: number
   ): Promise<{ isDuplicate: boolean; similarTo?: string; hash: string }> {
     // Skip if already indexed
@@ -150,7 +199,7 @@ export class PhashManager {
       console.error(`Warning: Could not compute hash for ${filename}: ${error}`);
       return { isDuplicate: false, hash: "" };
     }
-    
+
     // Check against recent entries (last 100)
     const recentEntries = this.index.entries.slice(-100);
     for (const entry of recentEntries) {
@@ -161,22 +210,22 @@ export class PhashManager {
         this.index.entries.push(newEntry);
         this.hashMap.set(filename, newEntry);
         this.saveIndex();
-        
+
         return { isDuplicate: true, similarTo: entry.filename, hash };
       }
     }
-    
+
     // No similar found - add to index
     const entry: PhashEntry = { filename, hash, timestamp };
     this.index.entries.push(entry);
     this.hashMap.set(filename, entry);
-    
+
     // Keep index manageable - remove very old entries (keep last 10000)
     if (this.index.entries.length > 10000) {
       const removed = this.index.entries.shift();
       if (removed) this.hashMap.delete(removed.filename);
     }
-    
+
     this.saveIndex();
     return { isDuplicate: false, hash };
   }
@@ -187,8 +236,8 @@ export class PhashManager {
   getStats(): { totalHashes: number; indexSizeBytes: number } {
     return {
       totalHashes: this.index.entries.length,
-      indexSizeBytes: existsSync(this.indexPath) 
-        ? readFileSync(this.indexPath).length 
+      indexSizeBytes: existsSync(this.indexPath)
+        ? readFileSync(this.indexPath).length
         : 0,
     };
   }

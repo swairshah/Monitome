@@ -1,6 +1,6 @@
 {
   "name": "@swairshah/activity-agent",
-  "version": "0.0.1",
+  "version": "0.2.5",
   "type": "module",
   "description": "Activity tracking agent that analyzes screenshots to maintain a searchable activity index",
   "main": "dist/index.js",
@@ -21,7 +21,7 @@
     "@mariozechner/pi-ai": "*",
     "@sinclair/typebox": "^0.34.33",
     "better-sqlite3": "^11.7.0",
-    "jimp": "^1.6.0"
+    "jpeg-js": "^0.4.4"
   },
   "devDependencies": {
     "@mariozechner/pi-coding-agent": "*",
