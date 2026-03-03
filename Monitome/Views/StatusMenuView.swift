@@ -42,18 +42,23 @@ struct StatusMenuView: View {
             // Actions
             HStack {
                 Button("Open Window") {
-                    // Set activation policy to regular (allows window focus)
-                    NSApp.setActivationPolicy(.regular)
-                    NSApp.activate(ignoringOtherApps: true)
+                    openMainWindow()
+                }
+                .buttonStyle(.bordered)
 
-                    // Find and show the main window
-                    for window in NSApp.windows {
-                        if window.title == "Monitome" || window.styleMask.contains(.titled) {
-                            window.makeKeyAndOrderFront(nil)
-                            window.orderFrontRegardless()
-                            break
-                        }
-                    }
+                Spacer()
+
+                Button("Settings") {
+                    openMainWindow()
+                    NotificationCenter.default.post(name: .openSettingsTab, object: nil)
+                }
+                .buttonStyle(.bordered)
+            }
+
+            HStack {
+                Button("Permissions") {
+                    openMainWindow()
+                    NotificationCenter.default.post(name: .showPermissionsOnboarding, object: nil)
                 }
                 .buttonStyle(.bordered)
 
@@ -66,7 +71,24 @@ struct StatusMenuView: View {
             }
         }
         .padding()
-        .frame(width: 260)
+        .frame(width: 290)
+    }
+
+    private func openMainWindow() {
+        // Set activation policy to regular (allows window focus)
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+
+        // Find and show the main window
+        for window in NSApp.windows {
+            if window.title == "Monitome" || window.styleMask.contains(.titled) {
+                window.makeKeyAndOrderFront(nil)
+                window.orderFrontRegardless()
+                break
+            }
+        }
+
+        NotificationCenter.default.post(name: .openMainWindow, object: nil)
     }
 
     private func formatBytes(_ bytes: Int64) -> String {

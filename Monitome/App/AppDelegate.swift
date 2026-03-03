@@ -4,7 +4,6 @@
 //
 
 import AppKit
-import ScreenCaptureKit
 import Combine
 import KeyboardShortcuts
 
@@ -50,25 +49,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Start activity agent indexing
         ActivityAgentManager.shared.startPeriodicIndexing()
 
-        // Check permission and start if previously recording
-        Task {
-            do {
-                _ = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-                // Permission granted - restore saved preference
-                let savedPref = UserDefaults.standard.bool(forKey: "isRecording")
-                AppState.shared.isRecording = savedPref
-
-                // Request accessibility permission for browser tab detection
-                // Skip in DEBUG builds to avoid repeated prompts (code signature changes)
-                #if !DEBUG
-                if !eventMonitor.hasAccessibilityPermission {
-                    eventMonitor.requestAccessibilityPermission()
-                }
-                #endif
-            } catch {
-                print("Screen recording permission not granted")
-                AppState.shared.isRecording = false
-            }
+        // Restore recording state only if required permission is already granted
+        let savedPref = UserDefaults.standard.bool(forKey: "isRecording")
+        if PermissionsManager.isScreenRecordingGranted {
+            AppState.shared.isRecording = savedPref
+        } else {
+            print("Screen recording permission not granted")
+            AppState.shared.isRecording = false
+            NotificationCenter.default.post(name: .showPermissionsOnboarding, object: nil)
         }
     }
 

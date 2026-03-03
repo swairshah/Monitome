@@ -8,6 +8,7 @@ import SwiftUI
 enum MainTab {
     case search
     case chat
+    case settings
     case dayActivity  // Shows activity for selected date
 }
 
@@ -17,7 +18,7 @@ struct MainView: View {
     @State private var selectedDate = Date()
     @State private var screenshots: [Screenshot] = []
     @State private var selectedScreenshot: Screenshot?
-    @State private var showSettings = false
+    @State private var showPermissionsOnboarding = false
     @State private var searchText = ""
     @State private var searchResults: [ActivitySearchResult] = []
     @State private var isSearchingInProgress = false
@@ -137,7 +138,7 @@ struct MainView: View {
                     
                     Spacer()
                     
-                    Button(action: { showSettings = true }) {
+                    Button(action: { selectedTab = .settings }) {
                         Image(systemName: "gear")
                     }
                     .buttonStyle(.plain)
@@ -167,6 +168,15 @@ struct MainView: View {
                             .cornerRadius(6)
                     }
                     .buttonStyle(.plain)
+
+                    Button(action: { selectedTab = .settings }) {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 14))
+                            .frame(width: 32, height: 24)
+                            .background(selectedTab == .settings ? Color.accentColor.opacity(0.2) : Color.clear)
+                            .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
                     
                     Spacer()
                 }
@@ -188,6 +198,8 @@ struct MainView: View {
                     )
                 case .chat:
                     AgentChatView()
+                case .settings:
+                    SettingsView(embedded: true)
                 case .dayActivity:
                     DayActivityView(
                         date: selectedDate,
@@ -211,6 +223,7 @@ struct MainView: View {
         .onAppear {
             loadScreenshots(for: selectedDate)
             setupNotificationObserver()
+            evaluatePermissionsOnboarding()
             
             // Start periodic indexing when app appears (if enabled)
             if UserDefaults.standard.object(forKey: "indexingEnabled") == nil {
@@ -221,11 +234,20 @@ struct MainView: View {
                 agentManager.startPeriodicIndexing()
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .openSettingsTab)) { _ in
+            selectedTab = .settings
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .showPermissionsOnboarding)) { _ in
+            showPermissionsOnboarding = true
+        }
         .sheet(item: $selectedScreenshot) { screenshot in
             ScreenshotDetailView(screenshot: screenshot)
         }
-        .sheet(isPresented: $showSettings) {
-            SettingsView()
+        .sheet(isPresented: $showPermissionsOnboarding) {
+            PermissionsOnboardingView {
+                showPermissionsOnboarding = false
+            }
+            .interactiveDismissDisabled(true)
         }
         .sheet(isPresented: $showActivityLog) {
             ActivityLogView()
@@ -284,6 +306,15 @@ struct MainView: View {
                 loadScreenshots(for: selectedDate)
             }
         }
+    }
+
+    private func evaluatePermissionsOnboarding() {
+        if PermissionsManager.isScreenRecordingGranted {
+            UserDefaults.standard.set(true, forKey: "didCompletePermissionsOnboarding")
+            return
+        }
+
+        showPermissionsOnboarding = true
     }
 
     private func formatBytes(_ bytes: Int64) -> String {

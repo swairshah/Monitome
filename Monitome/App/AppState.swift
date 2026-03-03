@@ -70,4 +70,10 @@ extension Notification.Name {
 
     /// Posted to request opening the main window
     static let openMainWindow = Notification.Name("openMainWindow")
+
+    /// Posted to switch MainView to the Settings tab
+    static let openSettingsTab = Notification.Name("openSettingsTab")
+
+    /// Posted to present permissions onboarding UI
+    static let showPermissionsOnboarding = Notification.Name("showPermissionsOnboarding")
 }
