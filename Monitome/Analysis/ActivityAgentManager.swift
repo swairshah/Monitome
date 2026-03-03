@@ -80,18 +80,32 @@ final class ActivityAgentManager: ObservableObject {
         let bundleMacOS = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/activity-agent").path
         let bundleResources = Bundle.main.resourcePath.map { $0 + "/activity-agent" } ?? ""
         
+        #if DEBUG
+        // In development, prefer the source binary so code changes are picked up
+        // immediately without relying on whatever binary got copied into the app bundle.
         let possiblePaths = [
-            // In the app bundle's MacOS folder (preferred for executables)
+            NSHomeDirectory() + "/work/projects/Monitome/activity-agent/dist/activity-agent",
+            // In the app bundle's MacOS folder
             bundleMacOS,
             // In the app bundle's Resources
             bundleResources,
-            // Development: source project
-            NSHomeDirectory() + "/work/projects/Monitome/activity-agent/dist/activity-agent",
             // Installed via brew or manually
             "/usr/local/bin/activity-agent",
             "/opt/homebrew/bin/activity-agent",
             NSHomeDirectory() + "/.local/bin/activity-agent"
         ]
+        #else
+        let possiblePaths = [
+            // In the app bundle's MacOS folder (preferred for executables)
+            bundleMacOS,
+            // In the app bundle's Resources
+            bundleResources,
+            // Installed via brew or manually
+            "/usr/local/bin/activity-agent",
+            "/opt/homebrew/bin/activity-agent",
+            NSHomeDirectory() + "/.local/bin/activity-agent"
+        ]
+        #endif
         
         let foundPath = possiblePaths.first { FileManager.default.fileExists(atPath: $0) }
         self.agentPath = foundPath ?? "/usr/local/bin/activity-agent"
@@ -387,6 +401,116 @@ final class ActivityAgentManager: ObservableObject {
             return "Error: \(error.localizedDescription)"
         }
     }
+    
+    // MARK: - Reanalyze
+    
+    /// Reanalyze screenshots for a specific date with current rules
+    func reanalyzeDate(_ date: Date) async {
+        guard !isIndexing, isAgentAvailable else { return }
+        
+        isIndexing = true
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let dateStr = formatter.string(from: date)
+        
+        log("Reanalyzing entries for \(dateStr)...", type: .info)
+        defer { isIndexing = false }
+        
+        do {
+            let output = try await runAgentWithStreaming(["reanalyze", "--date", dateStr]) { [weak self] line in
+                Task { @MainActor in
+                    self?.parseAndLogLine(line)
+                }
+            }
+            
+            if output.contains("Reanalyzed:") {
+                log("Reanalysis complete for \(dateStr)", type: .success)
+            } else {
+                log("Reanalysis finished for \(dateStr)", type: .info)
+            }
+            await refreshStats()
+        } catch {
+            log("Reanalysis failed: \(error.localizedDescription)", type: .error)
+        }
+    }
+    
+    /// Reanalyze screenshots for a date range with current rules
+    func reanalyzeDateRange(from startDate: Date, to endDate: Date) async {
+        guard !isIndexing, isAgentAvailable else { return }
+        
+        isIndexing = true
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let startStr = formatter.string(from: startDate)
+        let endStr = formatter.string(from: endDate)
+        
+        log("Reanalyzing entries from \(startStr) to \(endStr)...", type: .info)
+        defer { isIndexing = false }
+        
+        do {
+            let output = try await runAgentWithStreaming(["reanalyze", "--from", startStr, "--to", endStr]) { [weak self] line in
+                Task { @MainActor in
+                    self?.parseAndLogLine(line)
+                }
+            }
+            
+            if output.contains("Reanalyzed:") {
+                log("Reanalysis complete", type: .success)
+            } else {
+                log("Reanalysis finished", type: .info)
+            }
+            await refreshStats()
+        } catch {
+            log("Reanalysis failed: \(error.localizedDescription)", type: .error)
+        }
+    }
+    
+    /// Reanalyze specific screenshot files with current rules
+    func reanalyzeFiles(_ filenames: [String]) async {
+        guard !isIndexing, isAgentAvailable else { return }
+        
+        isIndexing = true
+        log("Reanalyzing \(filenames.count) file(s)...", type: .info)
+        defer { isIndexing = false }
+        
+        do {
+            var args = ["reanalyze", "--files"] + filenames
+            let output = try await runAgentWithStreaming(args) { [weak self] line in
+                Task { @MainActor in
+                    self?.parseAndLogLine(line)
+                }
+            }
+            
+            log("Reanalysis complete", type: .success)
+            await refreshStats()
+        } catch {
+            log("Reanalysis failed: \(error.localizedDescription)", type: .error)
+        }
+    }
+    
+    /// Reanalyze ALL screenshots with current rules (slow!)
+    func reanalyzeAll() async {
+        guard !isIndexing, isAgentAvailable else { return }
+        
+        isIndexing = true
+        log("Reanalyzing ALL entries with current rules...", type: .info)
+        defer { isIndexing = false }
+        
+        do {
+            let output = try await runAgentWithStreaming(["reanalyze", "--all"]) { [weak self] line in
+                Task { @MainActor in
+                    self?.parseAndLogLine(line)
+                }
+            }
+            
+            log("Full reanalysis complete", type: .success)
+            await refreshStats()
+        } catch {
+            log("Reanalysis failed: \(error.localizedDescription)", type: .error)
+        }
+    }
+    
+    // MARK: - Chat
     
     /// Free-form chat - agent with tools handles everything
     /// Pass conversation history for context
