@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 # Configuration
 APP_NAME="Monitome"
@@ -25,7 +25,12 @@ mkdir -p "$DIST_DIR"
 # 1. Build the activity-agent binary (Universal: ARM64 + x86_64)
 echo "Building activity-agent (universal binary)..."
 cd "$PROJECT_DIR/activity-agent"
-npm install --silent 2>/dev/null || true
+# Keep dependencies deterministic and fail fast if install is broken.
+if [ -f bun.lock ]; then
+    bun install --frozen-lockfile
+else
+    bun install
+fi
 
 # Build for both architectures
 echo "  Building for ARM64..."
@@ -86,6 +91,10 @@ if [ -f "$AGENT_BINARY" ]; then
     mv "$AGENT_BINARY" "$AGENT_BINARY.tmp"
 fi
 
+XCODEBUILD_LOG="$DIST_DIR/xcodebuild.log"
+
+# Keep console output readable while preserving full logs for debugging.
+# NOTE: "BUILD" alone is too broad (matches env vars like BUILD_DIR); anchor to build status lines instead.
 xcodebuild -project Monitome.xcodeproj \
     -scheme Monitome \
     -configuration Release \
@@ -96,7 +105,13 @@ xcodebuild -project Monitome.xcodeproj \
     CODE_SIGN_IDENTITY="$SIGN_IDENTITY" \
     DEVELOPMENT_TEAM="$TEAM_ID" \
     CODE_SIGN_STYLE=Manual \
-    2>&1 | grep -E "(error:|warning:|BUILD|Signing)" || true
+    2>&1 | tee "$XCODEBUILD_LOG" | grep -E "(error:|warning:|\*\* BUILD|Signing Identity)" | awk '!seen[$0]++' || true
+
+if ! grep -q "\*\* BUILD SUCCEEDED \*\*" "$XCODEBUILD_LOG"; then
+    echo "❌ xcodebuild failed. Showing tail of full log ($XCODEBUILD_LOG):"
+    tail -n 80 "$XCODEBUILD_LOG"
+    exit 1
+fi
 
 # Restore the activity-agent binary
 if [ -f "$AGENT_BINARY.tmp" ]; then
