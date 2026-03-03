@@ -49,6 +49,8 @@ export class SearchIndex {
 
     // Helper to configure db
     const configureDb = (db: any) => {
+      // Disable mmap to avoid SQLITE_IOERR_VNODE in Bun compiled binaries
+      db.exec("PRAGMA mmap_size = 0");
       db.exec("PRAGMA journal_mode = WAL");
       db.exec("PRAGMA busy_timeout = 10000");
       db.exec("PRAGMA synchronous = NORMAL");
@@ -59,23 +61,20 @@ export class SearchIndex {
       db = new SearchIndex.DatabaseClass(dbPath);
       configureDb(db);
     } catch (e) {
-      // If open fails (e.g., WAL recovery needed), try to recover
+      // If open fails, try to recover
       console.error("SQLite open failed, attempting recovery:", e);
 
       // Close any partially-opened handle
       try { db?.close?.(); } catch {}
 
-      // Remove stale WAL/SHM files
-      try { unlinkSync(dbPath + "-wal"); } catch {}
-      try { unlinkSync(dbPath + "-shm"); } catch {}
-
       // Brief delay to let OS release file handles
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 200));
 
-      // Retry — open in DELETE journal mode first to avoid WAL issues, then switch
+      // Retry with mmap disabled and DELETE journal first
       db = new SearchIndex.DatabaseClass(dbPath);
-      db.exec("PRAGMA journal_mode = DELETE");
+      db.exec("PRAGMA mmap_size = 0");
       db.exec("PRAGMA busy_timeout = 10000");
+      db.exec("PRAGMA journal_mode = DELETE");
       db.exec("PRAGMA synchronous = NORMAL");
       // Now switch to WAL
       db.exec("PRAGMA journal_mode = WAL");
@@ -102,11 +101,13 @@ export class SearchIndex {
     }
 
     const db = new SearchIndex.DatabaseClass(dbPath);
-    
+
+    // Disable mmap to avoid SQLITE_IOERR_VNODE in Bun compiled binaries
+    db.exec("PRAGMA mmap_size = 0");
     // Enable WAL mode and set busy timeout for concurrent access
     db.exec("PRAGMA journal_mode = WAL");
     db.exec("PRAGMA busy_timeout = 5000");
-    
+
     const index = new SearchIndex(db);
     index.initialize();
     return index;
