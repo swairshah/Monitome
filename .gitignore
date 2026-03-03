@@ -93,3 +93,5 @@ agent.swift
 
 # Release artifacts
 dist/
+electron-migration.md
+activity-agent/scripts/
